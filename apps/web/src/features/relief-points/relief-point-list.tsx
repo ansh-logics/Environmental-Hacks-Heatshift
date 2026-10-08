@@ -4,6 +4,7 @@ import { Skeleton } from '../../components/ui/skeleton';
 import { withDistances } from './use-relief-points';
 import { ReliefPointCard } from './relief-point-card';
 import type { Coordinates } from '../../hooks/use-location';
+import type { NearbyReliefPoint } from './use-relief-points';
 
 export function ReliefPointList({
   points,
@@ -11,12 +12,16 @@ export function ReliefPointList({
   loading = false,
   emptyMessage = 'No relief points match this filter yet.',
   limit,
+  selectedId,
+  onSelect,
 }: {
   points: ReliefPoint[];
   origin: Coordinates;
   loading?: boolean;
   emptyMessage?: string;
   limit?: number;
+  selectedId?: string | null;
+  onSelect?: (point: NearbyReliefPoint) => void;
 }) {
   if (loading) {
     return (
@@ -33,7 +38,12 @@ export function ReliefPointList({
   return (
     <ul className="space-y-3">
       {nearby.map((point) => (
-        <ReliefPointCard key={point.id} point={point} />
+        <ReliefPointCard
+          key={point.id}
+          point={point}
+          selected={point.id === selectedId}
+          onSelect={onSelect}
+        />
       ))}
     </ul>
   );

@@ -43,7 +43,3 @@ export function formatClockHour(hour24: number): string {
   const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
   return `${hour12} ${period}`;
 }
-
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}

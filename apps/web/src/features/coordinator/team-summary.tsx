@@ -1,13 +1,25 @@
-import { CHECK_IN_STATUS_LABELS, type CheckInStatus } from '@heatshift/shared';
+import { Link } from 'react-router-dom';
+import {
+  CHECK_IN_STATUS_LABELS,
+  ROUTES,
+  type CheckInStatus,
+  type CheckInSummary,
+} from '@heatshift/shared';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
+import { StatCard } from '../../components/ui/stat';
 import { EmptyState } from '../../components/shared/empty-state';
-import { ErrorNote } from '../../components/shared/error-note';
-import { Skeleton } from '../../components/ui/skeleton';
+import {
+  IconClock,
+  IconDrop,
+  IconPeople,
+  IconAlert,
+  IconCheck,
+} from '../../components/ui/icons';
 import { relativeTime } from '../../lib/utils';
-import { useCheckInSummary } from '../check-ins/use-check-ins';
 
 const ORDER: CheckInStatus[] = ['unwell', 'need_water', 'need_break', 'okay'];
+
 const BAR_COLOUR: Record<CheckInStatus, string> = {
   okay: 'bg-heat-low',
   need_water: 'bg-heat-moderate',
@@ -15,29 +27,59 @@ const BAR_COLOUR: Record<CheckInStatus, string> = {
   unwell: 'bg-heat-severe',
 };
 
-/** Coordinator read-only view of the team's last 24 hours of check-ins. */
-export function TeamSummaryPanel({ windowHours = 24 }: { windowHours?: number }) {
-  const { data, error, loading, reload } = useCheckInSummary({ windowHours });
+/** Headline numbers a coordinator reads first. Every value comes from /check-ins/summary. */
+export function CoordinatorMetrics({ data }: { data: CheckInSummary }) {
+  const flagged =
+    data.byStatus.unwell + data.byStatus.need_water + data.byStatus.need_break;
 
-  if (loading) return <Skeleton className="h-56" />;
-  if (error) return <ErrorNote message={error.message} onRetry={reload} />;
-  if (!data) return <EmptyState title="No summary available yet." />;
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-6">
+      <StatCard
+        label={`Check-ins / ${data.windowHours} h`}
+        value={data.inWindow}
+        hint={`${data.total} recorded in total`}
+        icon={<IconClock size={18} />}
+      />
+      <StatCard
+        label="Workers reporting"
+        value={data.uniqueWorkers}
+        hint="Distinct check-in ids in this window"
+        icon={<IconPeople size={18} />}
+      />
+      <StatCard
+        label="Flagged for help"
+        value={flagged}
+        hint="Need water, need break or unwell"
+        tone={flagged > 0 ? 'moderate' : 'low'}
+        icon={<IconDrop size={18} />}
+      />
+      <StatCard
+        label="Unwell"
+        value={data.byStatus.unwell}
+        hint={
+          data.byStatus.unwell > 0
+            ? 'Escalate to a clinic call'
+            : 'Nobody reported unwell'
+        }
+        tone={data.byStatus.unwell > 0 ? 'severe' : 'low'}
+        icon={
+          data.byStatus.unwell > 0 ? <IconAlert size={18} /> : <IconCheck size={18} />
+        }
+      />
+    </div>
+  );
+}
 
+/** Status distribution across the window, drawn from the same summary payload. */
+export function StatusDistribution({ data }: { data: CheckInSummary }) {
   const max = Math.max(1, ...ORDER.map((status) => data.byStatus[status]));
 
   return (
-    <Card
-      eyebrow="Team"
-      title={`${data.inWindow} check-ins in the last ${data.windowHours} h`}
-    >
-      <p className="text-sm text-ink-500">
-        {data.total} total from {data.uniqueWorkers} workers on this demo team.
-      </p>
-
-      <ul className="mt-4 space-y-2">
+    <Card eyebrow="Distribution" title="Check-ins by status">
+      <ul className="space-y-3">
         {ORDER.map((status) => (
           <li key={status} className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-xs font-semibold text-ink-700">
+            <span className="w-32 shrink-0 text-xs font-semibold text-ink-700 sm:w-36">
               {CHECK_IN_STATUS_LABELS[status]}
             </span>
             <span className="h-3 flex-1 overflow-hidden rounded-full bg-sand-200">
@@ -52,16 +94,24 @@ export function TeamSummaryPanel({ windowHours = 24 }: { windowHours?: number })
           </li>
         ))}
       </ul>
+      <p className="mt-3 text-xs text-ink-500">
+        Bars are relative to the most common status in this window.
+      </p>
+    </Card>
+  );
+}
 
-      <h3 className="mt-5 text-sm font-bold">Latest taps</h3>
+export function LatestTaps({ data }: { data: CheckInSummary }) {
+  return (
+    <Card eyebrow="Timeline" title="Latest taps">
       {data.latest.length === 0 ? (
-        <EmptyState title="No check-ins posted yet." className="mt-2" />
+        <EmptyState title="No check-ins posted yet." />
       ) : (
-        <ul className="mt-2 space-y-2">
-          {data.latest.slice(0, 6).map((checkIn) => (
+        <ul className="space-y-2">
+          {data.latest.slice(0, 8).map((checkIn) => (
             <li
               key={checkIn.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-sand-300 bg-white px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-xl border border-sand-200 bg-white px-3 py-2.5"
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">
@@ -78,6 +128,12 @@ export function TeamSummaryPanel({ windowHours = 24 }: { windowHours?: number })
           ))}
         </ul>
       )}
+      <Link
+        to={ROUTES.relief}
+        className="mt-3 inline-flex min-h-8 text-sm font-semibold text-heat-accent-dark hover:underline"
+      >
+        Open the relief network
+      </Link>
     </Card>
   );
 }

@@ -15,20 +15,20 @@ const TONE_CLASSES = {
   severe: 'border-heat-severe/40 text-heat-severe',
 } as const;
 
-/** Step 3: one tap tells the team something is wrong. */
+/** Step 4: one tap tells the team something is wrong. */
 export function CheckInBar({ coords }: { coords?: { lat: number; lng: number } }) {
   const { post, pending, lastPosted, error } = useCheckInPosting();
 
   return (
-    <Card eyebrow="Step 3" title="How are you right now?">
-      <div className="grid grid-cols-2 gap-3">
+    <Card eyebrow="Step 4" title="How are you right now?">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {CHECK_IN_BUTTONS.map((button) => {
           const Icon = ICONS[button.icon];
           return (
             <button
               key={button.status}
               type="button"
-              className={`flex min-h-20 flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white px-2 py-3 text-sm font-bold transition active:scale-[0.98] disabled:opacity-60 ${TONE_CLASSES[button.tone]}`}
+              className={`flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 bg-white px-2 py-3 text-sm font-bold transition-colors hover:bg-sand-100 active:scale-[0.98] disabled:opacity-60 ${TONE_CLASSES[button.tone]}`}
               onClick={() => void post(button.status, coords)}
               disabled={pending !== null}
             >

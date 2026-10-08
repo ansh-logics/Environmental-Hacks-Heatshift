@@ -103,6 +103,42 @@ export const IconPlate = (props: IconProps) => (
   </Svg>
 );
 
+export const IconChevron = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="m6 9 6 6 6-6" />
+  </Svg>
+);
+
+export const IconClock = (props: IconProps) => (
+  <Svg {...props}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </Svg>
+);
+
+export const IconInfo = (props: IconProps) => (
+  <Svg {...props}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5" />
+    <path d="M12 8v.5" />
+  </Svg>
+);
+
+export const IconSignal = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M4.5 15a10.6 10.6 0 0 1 15 0" />
+    <path d="M8 18.2a5.7 5.7 0 0 1 8 0" />
+    <path d="M12 21h.01" />
+  </Svg>
+);
+
+export const IconShield = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M12 3.5 5 6v5.5c0 4.2 2.9 7.4 7 9 4.1-1.6 7-4.8 7-9V6Z" />
+    <path d="m9.2 12 2 2 3.6-3.8" />
+  </Svg>
+);
+
 export const IconRefresh = (props: IconProps) => (
   <Svg {...props}>
     <path d="M20 12a8 8 0 1 1-2.4-5.7" />

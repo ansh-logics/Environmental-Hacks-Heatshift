@@ -6,6 +6,9 @@ import {
   SUN_EXPOSURES,
   WORK_TYPE_LABELS,
   WORK_TYPES,
+  type AccessLevel,
+  type SunExposure,
+  type WorkType,
 } from '@heatshift/shared';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
@@ -14,7 +17,6 @@ import { Input } from '../../components/ui/input';
 import { Select } from '../../components/ui/select';
 import { useAppState } from '../../app/providers';
 import { DEMO_IDENTITY_NOTE } from '../../lib/constants';
-import type { AccessLevel, SunExposure, WorkType } from '@heatshift/shared';
 
 const toOptions = <T extends string>(values: readonly T[], labels: Record<T, string>) =>
   values.map((value) => ({ value, label: labels[value] }));
@@ -48,7 +50,7 @@ export function OnboardingPanel() {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Work" htmlFor="workType">
           <Select
             id="workType"
@@ -60,48 +62,46 @@ export function OnboardingPanel() {
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="City" htmlFor="city">
-            <Input
-              id="city"
-              value={draft.city}
-              onChange={(event) => setDraft({ ...draft, city: event.target.value })}
-              placeholder="New Delhi"
-            />
-          </Field>
-          <Field label="Hours in shift" htmlFor="hours">
-            <Input
-              id="hours"
-              type="number"
-              min={1}
-              max={16}
-              step={0.5}
-              value={draft.hoursInShift}
-              onChange={(event) =>
-                setDraft({ ...draft, hoursInShift: Number(event.target.value) || 1 })
-              }
-            />
-          </Field>
-        </div>
+        <Field label="City" htmlFor="city">
+          <Input
+            id="city"
+            value={draft.city}
+            onChange={(event) => setDraft({ ...draft, city: event.target.value })}
+            placeholder="New Delhi"
+          />
+        </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Shift start" htmlFor="shiftStart">
-            <Input
-              id="shiftStart"
-              type="time"
-              value={draft.shiftStart}
-              onChange={(event) => setDraft({ ...draft, shiftStart: event.target.value })}
-            />
-          </Field>
-          <Field label="Shift end" htmlFor="shiftEnd">
-            <Input
-              id="shiftEnd"
-              type="time"
-              value={draft.shiftEnd}
-              onChange={(event) => setDraft({ ...draft, shiftEnd: event.target.value })}
-            />
-          </Field>
-        </div>
+        <Field label="Hours in shift" htmlFor="hours">
+          <Input
+            id="hours"
+            type="number"
+            min={1}
+            max={16}
+            step={0.5}
+            value={draft.hoursInShift}
+            onChange={(event) =>
+              setDraft({ ...draft, hoursInShift: Number(event.target.value) || 1 })
+            }
+          />
+        </Field>
+
+        <Field label="Shift start" htmlFor="shiftStart">
+          <Input
+            id="shiftStart"
+            type="time"
+            value={draft.shiftStart}
+            onChange={(event) => setDraft({ ...draft, shiftStart: event.target.value })}
+          />
+        </Field>
+
+        <Field label="Shift end" htmlFor="shiftEnd">
+          <Input
+            id="shiftEnd"
+            type="time"
+            value={draft.shiftEnd}
+            onChange={(event) => setDraft({ ...draft, shiftEnd: event.target.value })}
+          />
+        </Field>
 
         <Field label="Sun at your work spot" htmlFor="sun">
           <Select
@@ -114,43 +114,40 @@ export function OnboardingPanel() {
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Drinking water" htmlFor="water">
-            <Select
-              id="water"
-              value={draft.waterAccess}
-              options={toOptions(ACCESS_LEVELS, ACCESS_LEVEL_LABELS)}
-              onChange={(event) =>
-                setDraft({ ...draft, waterAccess: event.target.value as AccessLevel })
-              }
-            />
-          </Field>
-          <Field label="Shade" htmlFor="shade">
-            <Select
-              id="shade"
-              value={draft.shadeAccess}
-              options={toOptions(ACCESS_LEVELS, ACCESS_LEVEL_LABELS)}
-              onChange={(event) =>
-                setDraft({ ...draft, shadeAccess: event.target.value as AccessLevel })
-              }
-            />
-          </Field>
-        </div>
-
-        <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-ink-700">
-          <input
-            type="checkbox"
-            className="h-5 w-5 accent-heat-accent"
-            checked={draft.acclimatized}
+        <Field label="Drinking water" htmlFor="water">
+          <Select
+            id="water"
+            value={draft.waterAccess}
+            options={toOptions(ACCESS_LEVELS, ACCESS_LEVEL_LABELS)}
             onChange={(event) =>
-              setDraft({ ...draft, acclimatized: event.target.checked })
+              setDraft({ ...draft, waterAccess: event.target.value as AccessLevel })
             }
           />
-          I am used to this heat (worked outdoors here for 2+ weeks)
-        </label>
+        </Field>
 
-        <p className="text-xs text-ink-500">{DEMO_IDENTITY_NOTE}</p>
+        <Field label="Shade" htmlFor="shade">
+          <Select
+            id="shade"
+            value={draft.shadeAccess}
+            options={toOptions(ACCESS_LEVELS, ACCESS_LEVEL_LABELS)}
+            onChange={(event) =>
+              setDraft({ ...draft, shadeAccess: event.target.value as AccessLevel })
+            }
+          />
+        </Field>
       </div>
+
+      <label className="mt-4 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink-700">
+        <input
+          type="checkbox"
+          className="h-5 w-5 accent-heat-accent"
+          checked={draft.acclimatized}
+          onChange={(event) => setDraft({ ...draft, acclimatized: event.target.checked })}
+        />
+        I am used to this heat (worked outdoors here for 2+ weeks)
+      </label>
+
+      <p className="mt-3 text-xs text-ink-500">{DEMO_IDENTITY_NOTE}</p>
     </Card>
   );
 }

@@ -1,7 +1,10 @@
 import type { HeatLevel, HeatRiskResult } from '@heatshift/shared';
 import { Badge, type BadgeTone } from '../../components/ui/badge';
 import { Card } from '../../components/ui/card';
+import { StatTile } from '../../components/ui/stat';
 import { DemoNotice } from '../../components/shared/demo-notice';
+import { IconChevron, IconInfo } from '../../components/ui/icons';
+import { Skeleton } from '../../components/ui/skeleton';
 import { formatClockHour } from '../../lib/utils';
 
 const TONE_BY_LEVEL: Record<HeatLevel, BadgeTone> = {
@@ -18,52 +21,76 @@ const RING_BY_LEVEL: Record<HeatLevel, string> = {
   severe: 'text-heat-severe',
 };
 
+export function HeatRiskEmptyCard() {
+  return (
+    <Card eyebrow="Step 3" title="Your plan will appear here">
+      <div className="flex items-start gap-3">
+        <IconInfo size={20} className="mt-0.5 shrink-0 text-ink-400" />
+        <p className="text-sm text-ink-500">
+          Nothing has been calculated yet. Set the weather above and run the check -
+          HeatShift will return a work/rest cycle, a water target and the hours to avoid
+          for your exact shift.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+export function HeatRiskLoadingCard() {
+  return (
+    <Card eyebrow="Step 3" title="Calculating your plan">
+      <Skeleton className="h-20" />
+      <Skeleton className="mt-3 h-16" />
+    </Card>
+  );
+}
+
 export function HeatRiskResultCard({ result }: { result: HeatRiskResult }) {
-  const tone = TONE_BY_LEVEL[result.level];
   const { plan } = result;
 
   return (
-    <Card eyebrow="Step 2" title="Your heat plan">
+    <Card eyebrow="Step 3" title="Follow this plan">
       <div className="flex items-center gap-4">
         <div
           className={`flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-2xl border-4 border-current ${RING_BY_LEVEL[result.level]}`}
         >
-          <span className="text-3xl font-extrabold tabular leading-none">
+          <span className="text-3xl font-extrabold leading-none tabular">
             {result.score}
           </span>
           <span className="text-[0.65rem] font-bold uppercase tracking-wide">/ 100</span>
         </div>
         <div className="min-w-0">
-          <Badge tone={tone}>{result.label}</Badge>
-          <p className="mt-1 text-sm font-semibold text-ink-900">{result.headline}</p>
-          <p className="text-xs text-ink-500">
+          <Badge tone={TONE_BY_LEVEL[result.level]}>{result.label}</Badge>
+          <p className="mt-1.5 text-base font-semibold leading-snug text-ink-900">
+            {result.headline}
+          </p>
+          <p className="mt-0.5 text-xs text-ink-500">
             Heat strain index {result.wbgtC} °C (WBGT)
           </p>
         </div>
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        {[
-          { label: 'Work per break cycle', value: `${plan.workMinutesPerCycle} min` },
-          { label: 'Rest in shade', value: `${plan.restMinutesPerCycle} min` },
-          {
-            label: 'Water per hour',
-            value: `${(plan.waterMlPerHour / 1000).toFixed(1)} L`,
-          },
-          {
-            label: 'Max shift now',
-            value: `${(plan.maxRecommendedShiftMinutes / 60).toFixed(1)} h`,
-          },
-        ].map((item) => (
-          <div key={item.label} className="rounded-xl bg-sand-100 p-3">
-            <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-              {item.label}
-            </dt>
-            <dd className="mt-0.5 text-lg font-bold tabular text-ink-900">
-              {item.value}
-            </dd>
-          </div>
-        ))}
+      <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          label="Work / cycle"
+          value={`${plan.workMinutesPerCycle} min`}
+          hint="Then rest"
+        />
+        <StatTile
+          label="Rest / cycle"
+          value={`${plan.restMinutesPerCycle} min`}
+          hint="In shade"
+        />
+        <StatTile
+          label="Water / hour"
+          value={`${(plan.waterMlPerHour / 1000).toFixed(1)} L`}
+          hint="Sip steadily"
+        />
+        <StatTile
+          label="Max shift"
+          value={`${(plan.maxRecommendedShiftMinutes / 60).toFixed(1)} h`}
+          hint={`Avoid after ${formatClockHour(plan.unsafeStartHour)}`}
+        />
       </dl>
 
       <ul className="mt-4 space-y-2">
@@ -78,12 +105,9 @@ export function HeatRiskResultCard({ result }: { result: HeatRiskResult }) {
         ))}
       </ul>
 
-      <p className="mt-3 text-xs text-ink-500">
-        Risky window starts {formatClockHour(plan.unsafeStartHour)}.
-      </p>
-
-      <details className="mt-3 rounded-xl border border-sand-300 p-3">
-        <summary className="cursor-pointer text-sm font-semibold text-ink-700">
+      <details className="group mt-4 rounded-xl border border-sand-200 px-3 py-2">
+        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-ink-700">
+          <IconChevron size={16} className="transition-transform group-open:rotate-180" />
           Why this score
         </summary>
         <ul className="mt-2 space-y-1.5 text-xs text-ink-500">

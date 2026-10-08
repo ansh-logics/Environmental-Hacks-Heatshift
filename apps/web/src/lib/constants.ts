@@ -19,10 +19,11 @@ export const API_TIMEOUT_MS = 8000;
 /** Poll interval for the API connectivity indicator. */
 export const HEALTH_POLL_MS = 20000;
 
+/** `label` fits the mobile bottom bar; `longLabel` is the desktop sidebar text. */
 export const NAV_ITEMS = [
-  { to: ROUTES.dashboard, label: 'My shift', icon: 'gauge' },
-  { to: ROUTES.relief, label: 'Relief', icon: 'pin' },
-  { to: ROUTES.coordinator, label: 'Team', icon: 'people' },
+  { to: ROUTES.dashboard, label: 'My shift', longLabel: 'My shift', icon: 'gauge' },
+  { to: ROUTES.relief, label: 'Relief', longLabel: 'Relief points', icon: 'pin' },
+  { to: ROUTES.coordinator, label: 'Team', longLabel: 'Team', icon: 'people' },
 ] as const;
 
 /** Used until the browser grants a real location. */

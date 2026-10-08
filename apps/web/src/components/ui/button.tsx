@@ -1,17 +1,20 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type Size = 'md' | 'lg';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'quiet';
+type Size = 'sm' | 'md' | 'lg';
 
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-heat-accent text-white hover:bg-heat-accent-dark disabled:bg-sand-400',
   secondary: 'bg-white text-ink-900 border-2 border-sand-300 hover:border-heat-accent',
   ghost: 'bg-transparent text-ink-700 hover:bg-sand-100',
   danger: 'bg-heat-severe text-white hover:brightness-95',
+  /** Low-emphasis text button for secondary/diagnostic actions. */
+  quiet: 'bg-transparent text-ink-500 hover:bg-sand-100 hover:text-ink-900',
 };
 
 const SIZES: Record<Size, string> = {
+  sm: 'min-h-9 px-3 text-sm',
   md: 'min-h-11 px-4 text-sm',
   lg: 'min-h-14 px-5 text-base',
 };

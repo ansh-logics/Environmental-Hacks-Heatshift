@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { HealthResponse } from '@heatshift/shared';
 import { api } from '../lib/api-client';
 import { HEALTH_POLL_MS } from '../lib/constants';
 
 export type ApiConnection = 'checking' | 'online' | 'offline';
 
-/** Polls GET /health so the dashboard can always state whether it has a backend. */
-export function useApiStatus(): {
+export type ApiStatus = {
   connection: ApiConnection;
   health: HealthResponse | null;
   lastCheckedAt: string | null;
   refresh: () => void;
-} {
+};
+
+/** Polls GET /health so the shell can always state whether it has a backend. */
+export function useApiStatus(): ApiStatus {
   const [connection, setConnection] = useState<ApiConnection>('checking');
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
@@ -45,5 +47,8 @@ export function useApiStatus(): {
     };
   }, [nonce]);
 
-  return { connection, health, lastCheckedAt, refresh };
+  return useMemo(
+    () => ({ connection, health, lastCheckedAt, refresh }),
+    [connection, health, lastCheckedAt, refresh],
+  );
 }
