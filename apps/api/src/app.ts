@@ -7,6 +7,7 @@ import { healthRoutes } from './modules/health';
 import { reliefPointRoutes } from './modules/relief-points';
 import { checkInRoutes } from './modules/check-ins';
 import { heatRiskRoutes } from './modules/heat-risk';
+import { weatherRoutes } from './modules/weather';
 
 /**
  * App factory: no listen, no side effects, so tests and the boot script can
@@ -31,7 +32,9 @@ export async function buildApp() {
         `GET ${API_PREFIX}/relief-points`,
         `POST ${API_PREFIX}/check-ins`,
         `GET ${API_PREFIX}/check-ins/summary`,
+        `GET ${API_PREFIX}/weather/conditions`,
         `POST ${API_PREFIX}/heat-risk/preview`,
+        `POST ${API_PREFIX}/heat-risk/live`,
       ],
     }),
   );
@@ -39,6 +42,7 @@ export async function buildApp() {
   await app.register(healthRoutes);
   await app.register(reliefPointRoutes);
   await app.register(checkInRoutes);
+  await app.register(weatherRoutes);
   await app.register(heatRiskRoutes);
 
   return app;

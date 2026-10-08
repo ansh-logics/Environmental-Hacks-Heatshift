@@ -3,8 +3,8 @@ import {
   HEAT_LEVEL_LABELS,
   HEAT_LEVEL_WBGT_THRESHOLDS,
   type HeatLevel,
+  type HeatRiskComputed,
   type HeatRiskInput,
-  type HeatRiskResult,
 } from '@heatshift/shared';
 
 /** Metabolic intensity of each work type, 1.0 = heavy continuous labour. */
@@ -126,9 +126,11 @@ const PLAN_BY_LEVEL: Record<
 
 /**
  * Pure, synchronous risk model. No network, no database: this is the function
- * the whole product rests on, so it stays easy to reason about and to test.
+ * the whole product rests on, so it stays easy to reason about and to test. It
+ * says nothing about where the observation came from - the route that called it
+ * attaches that provenance.
  */
-export function computeHeatRisk(input: HeatRiskInput): HeatRiskResult {
+export function computeHeatRisk(input: HeatRiskInput): HeatRiskComputed {
   const base = wbgtC(input);
   const intensity = WORK_INTENSITY[input.workType];
   const strain =
@@ -190,10 +192,6 @@ export function computeHeatRisk(input: HeatRiskInput): HeatRiskResult {
       },
     ],
     input,
-    meta: {
-      demo: true,
-      source: 'HeatShift WBGT model v0.1 (no live weather provider yet)',
-    },
   };
 }
 

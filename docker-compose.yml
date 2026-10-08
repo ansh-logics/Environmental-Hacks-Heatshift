@@ -61,6 +61,9 @@ services:
       target: runtime
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+        # Interpolated from the repo-root .env by compose and baked into the
+        # bundle. An empty value is fine: the map shows its fallback panel.
+        VITE_MAPBOX_ACCESS_TOKEN: ${VITE_MAPBOX_ACCESS_TOKEN:-}
     image: heatshift-web:local
     restart: unless-stopped
     ports:

@@ -2,19 +2,24 @@ import {
   API_PREFIX,
   checkInSummaryResponseSchema,
   healthResponseSchema,
+  heatRiskLiveRequestSchema,
+  heatRiskLiveResponseSchema,
   heatRiskPreviewRequestSchema,
   heatRiskPreviewResponseSchema,
   reliefPointListResponseSchema,
   checkInCreateResponseSchema,
+  weatherConditionsResponseSchema,
   type CheckInSummary,
   type CreateCheckInInput,
   type HeatRiskInput,
+  type HeatRiskLiveRequest,
+  type HeatRiskLiveResult,
   type HeatRiskResult,
   type HealthResponse,
   type ReliefPointType,
   type CheckIn,
 } from '@heatshift/shared';
-import { API_BASE_URL, API_TIMEOUT_MS } from './constants';
+import { API_TIMEOUT_MS, LIVE_HEAT_RISK_TIMEOUT_MS, API_BASE_URL } from './constants';
 
 export type ApiErrorReason = 'network' | 'timeout' | 'server' | 'contract';
 
@@ -131,12 +136,21 @@ export const api = {
   },
 
   listReliefPoints(
-    params: { type?: ReliefPointType; verifiedOnly?: boolean; limit?: number } = {},
+    params: {
+      type?: ReliefPointType;
+      verifiedOnly?: boolean;
+      limit?: number;
+      latitude?: number;
+      longitude?: number;
+    } = {},
   ) {
     const suffix = queryString({
       type: params.type,
       verifiedOnly: params.verifiedOnly ? 'true' : undefined,
       limit: params.limit,
+      // Sent as a pair or not at all; the API rejects half a coordinate.
+      latitude: params.latitude,
+      longitude: params.longitude,
     });
     return request(`${API_PREFIX}/relief-points${suffix}`, reliefPointListResponseSchema);
   },
@@ -168,5 +182,27 @@ export const api = {
       method: 'POST',
       body: valid,
     }).then((response) => response.data);
+  },
+
+  /**
+   * Live plan from a position the worker agreed to share. Slower than the other
+   * calls because the API waits on the weather provider for us.
+   */
+  liveHeatRisk(input: HeatRiskLiveRequest): Promise<HeatRiskLiveResult> {
+    const valid = heatRiskLiveRequestSchema.parse(input);
+    return request(`${API_PREFIX}/heat-risk/live`, heatRiskLiveResponseSchema, {
+      method: 'POST',
+      body: valid,
+      timeoutMs: LIVE_HEAT_RISK_TIMEOUT_MS,
+    }).then((response) => response.data);
+  },
+
+  getWeatherConditions(coordinate: { latitude: number; longitude: number }) {
+    const suffix = queryString(coordinate);
+    return request(
+      `${API_PREFIX}/weather/conditions${suffix}`,
+      weatherConditionsResponseSchema,
+      { timeoutMs: LIVE_HEAT_RISK_TIMEOUT_MS },
+    ).then((response) => response.data);
   },
 };

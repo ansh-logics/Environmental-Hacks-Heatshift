@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { UpstreamError } from '../lib/errors';
 
 /** Uniform error envelope: { error: { code, message, details? } }. */
 export function registerErrorHandlers(app: FastifyInstance): void {
@@ -28,6 +29,16 @@ export function registerErrorHandlers(app: FastifyInstance): void {
     }
 
     const status = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
+
+    if (error instanceof UpstreamError) {
+      // The provider is the failure, not us: log the cause, answer with the
+      // status the caller can act on.
+      reply.request.log.warn({ err: error }, 'Weather provider unavailable');
+      reply.status(status).send({
+        error: { code: error.code, message: error.message },
+      });
+      return;
+    }
 
     if (status >= 500) {
       reply.request.log.error(error, 'Unhandled route error');

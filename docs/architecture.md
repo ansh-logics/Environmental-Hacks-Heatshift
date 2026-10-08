@@ -41,8 +41,15 @@ deployment change, not a redesign.
                       | postgres.js               |        |                      |
                       | boot: migrate -> seed ->  |        |                      |
                       |       start               |        |                      |
-                      +---------------------------+        +----------------------+
-                             healthcheck /health                    healthcheck pg_isready
+                      +-------------+-------------+        +----------------------+
+                        healthcheck /health                   healthcheck pg_isready
+                                    |
+                                    | https (server-side, worker's coordinates only)
+                                    v
+                          api.open-meteo.com
+
+        Browser also fetches map tiles + style directly from api.mapbox.com
+        on /relief only, with the public token baked into the web bundle.
 ```
 
 - `docker compose up --build` is the single entry point.
@@ -64,16 +71,18 @@ heatshift/
       src/
         routes/          HomePage, WorkerDashboardPage, ReliefMapPage, CoordinatorPage
         components/      mobile shell, bottom navigation, cards
+        features/        relief-points/ (list, Mapbox map, marker factory),
+                         heat-risk/ (manual + live plan hooks)
         lib/             API client (typed against @heatshift/shared)
-      vite.config.ts     includes vite-plugin-pwa
+      vite.config.ts     root envDir, vite-plugin-pwa, ES worker format for Mapbox
       Dockerfile         multi-stage: build -> nginx runtime
     api/
       src/
         modules/
           health/        GET /health
-          heat-risk/     POST /api/v1/heat-risk/preview + algorithm
-          weather/       contract-only placeholder (no route registered)
-          relief-points/ GET /api/v1/relief-points
+          heat-risk/     POST /api/v1/heat-risk/preview + /live + algorithm
+          weather/       Open-Meteo provider, GET /api/v1/weather/conditions, cache
+          relief-points/ GET /api/v1/relief-points (+ distance ordering)
           check-ins/     POST /api/v1/check-ins, GET /api/v1/check-ins/summary
         db/
           schema.ts      Drizzle table definitions
@@ -99,17 +108,51 @@ Each module owns its route registration, service logic and validation glue. Modu
 do not import each other's internals; cross-module needs go through `shared` types
 or the database.
 
-| Module          | Route surface                                             | Responsibility                                                                                                                                                                                        |
-| --------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `health`        | `GET /health`                                             | Reports `service` and `database` status; performs a real `SELECT 1` so container health checks mean something.                                                                                        |
-| `heat-risk`     | `POST /api/v1/heat-risk/preview`                          | Runs the WBGT-based algorithm (section 6). Stateless: inputs come from the request because no weather provider is wired yet.                                                                          |
-| `weather`       | _none (contract only)_                                    | A placeholder module holding the future provider interface (fetch conditions by location/time). Deliberately registers no route in this phase so the client never depends on an unstable integration. |
-| `relief-points` | `GET /api/v1/relief-points`                               | Filterable list (type, verifiedOnly, limit). Tags responses `meta.demo = true` because the seeded Delhi dataset is demo data.                                                                         |
-| `check-ins`     | `POST /api/v1/check-ins`, `GET /api/v1/check-ins/summary` | Persists one-tap worker status check-ins; aggregates totals per status over the last 24 h plus the most recent items, optionally scoped by `userId`.                                                  |
+| Module          | Route surface                                                   | Responsibility                                                                                                                                                                                                                    |
+| --------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `health`        | `GET /health`                                                   | Reports `service` and `database` status; performs a real `SELECT 1` so container health checks mean something.                                                                                                                    |
+| `heat-risk`     | `POST /api/v1/heat-risk/preview`, `POST /api/v1/heat-risk/live` | Runs the WBGT-based algorithm (section 6). `preview` takes weather from the request; `live` takes a position plus the worker profile, fetches weather through the `weather` **service** in-process, and feeds the same algorithm. |
+| `weather`       | `GET /api/v1/weather/conditions`                                | Open-Meteo provider: fetch, strict Zod validation of the upstream payload, per-process cache, and a typed `WeatherConditions` result. The only module that talks to an upstream HTTP API.                                         |
+| `relief-points` | `GET /api/v1/relief-points`                                     | Filterable list (type, verifiedOnly, limit) plus optional `latitude`/`longitude`, which adds `distanceKm` to each row and returns nearest-first. Tags responses `meta.demo = true`.                                               |
+| `check-ins`     | `POST /api/v1/check-ins`, `GET /api/v1/check-ins/summary`       | Persists one-tap worker status check-ins; aggregates totals per status over the last 24 h plus the most recent items, optionally scoped by `userId`.                                                                              |
 
 Every handler validates request params/body/query with Zod schemas from
 `packages/shared` and validates responses too — a contract violation fails at the
 boundary, not in the UI.
+
+### 4.1 Weather provider, cache, and the in-process call
+
+`POST /api/v1/heat-risk/live` needs weather. It does **not** make an HTTP request to
+`GET /api/v1/weather/conditions` — a route calling another route over the network
+would add a hop, a timeout and a failure mode for no benefit inside one process.
+Instead both routes call `weatherService.getConditions()` directly, and the HTTP
+endpoint exists as a public contract for other clients.
+
+Provider rules, all in `apps/api/src/modules/weather/`:
+
+- **Open-Meteo, no key.** The request pins the current-weather fields we consume; the
+  URL is built from validated numbers only, so no user string reaches the upstream URL.
+- **Upstream responses are not trusted.** The payload is parsed with a Zod schema;
+  anything malformed (missing `current`, NaN temperatures, an unexpected shape) is a
+  provider failure and answers `WEATHER_UNAVAILABLE` with `502` (`503` when the 6 s
+  timeout fires). There is no fallback to invented numbers — a worker must never see
+  a plan built from weather that was not observed.
+- **Cache: 0.1° cell, 600 s TTL, in-process.** Coordinates are rounded to a 0.1°
+  cell (~11 km) before the key, so a rider moving down a road does not re-hit the
+  provider every refresh. Identical in-flight requests share one promise. Failures
+  are never cached, so a blip is retried on the next ask instead of sticking for ten
+  minutes.
+- **Consequence to know before scaling out:** the cache is per process. Two API
+  replicas keep two caches, and a container restart empties it. That is fine for one
+  container on a laptop demo; it is roadmap item 4 in `docs/product.md` before
+  running more than one replica.
+- **Honest coordinates.** Open-Meteo answers on its own ~0.25° grid, so the response
+  carries both the position that was asked for (`coordinates`) and the grid point the
+  provider actually used (`weather.location`). Distances and provenance never claim
+  more precision than the data has.
+- **Time is normalised.** The provider reports local wall-clock without an offset;
+  the module converts it to a UTC ISO stamp and returns `freshness.ageSeconds`, so
+  "observed 6 minutes ago" is computed from the data, not from the browser's clock.
 
 ## 5. Data model (Drizzle / PostgreSQL)
 
@@ -157,7 +200,10 @@ Design notes:
 - `worker_profiles` is 1:1 with `users` and keyed by `user_id` — profile data only
   exists for workers.
 - No PostGIS in this phase: coordinates are plain floats and distance is computed
-  in application code (haversine), keeping the RDS target vanilla PostgreSQL.
+  in application code (haversine), keeping the RDS target vanilla PostgreSQL. When a
+  position is supplied the service reads at most `DISTANCE_SCAN_LIMIT` (500) rows,
+  sorts by distance in memory and returns the requested page — correct for a seeded
+  city, and the number to revisit before a real multi-city dataset.
 - Migrations are Drizzle-generated; the boot-time idempotent seed (`SEED_ON_BOOT`)
   is never a manual step for the demo.
 
@@ -166,12 +212,25 @@ Design notes:
 Implemented in `apps/api/src/modules/heat-risk/`. Transparent, deterministic, and
 documented — judges and future public-health partners must be able to audit it.
 
-### 6.1 Inputs (all supplied by `POST /api/v1/heat-risk/preview`)
+### 6.1 Inputs
 
 `temperatureC`, `humidityPercent`, `windSpeedKmh`, `sunExposure` (`full_sun` /
 `partial_shade` / `deep_shade` / `indoor`), `hoursInShift`, `workType`, `waterAccess`,
 `shadeAccess`, `acclimatized`. The enums and defaults live in
 `@heatshift/shared` (`heatRiskPreviewRequestSchema`), so the API and UI cannot drift.
+
+Two routes feed those nine numbers in:
+
+- `POST /api/v1/heat-risk/preview` — the caller supplies the observation (manual city
+  and shift answers, tests, demos).
+- `POST /api/v1/heat-risk/live` — the caller supplies a position plus the profile; the
+  observation comes from `weather` (§4.1). Only the three measured fields change
+  source; `sunExposure` deliberately stays the worker's answer, because what they are
+  standing under matters more to the plan than the cloud cover above it. The sky's own
+  reading is still visible in the response as `weather.sunExposure`.
+
+Both call the same function with the same schema, so a live plan and a typed plan are
+the same object and render identically.
 
 ### 6.2 Wet-bulb temperature
 
@@ -264,16 +323,36 @@ The full plan object in the response is
 ## 7. Frontend architecture
 
 - **Routes:** `/` (HomePage landing), `/dashboard` (WorkerDashboardPage: API
-  connectivity card, heat-risk preview, check-in buttons, nearby relief list),
-  `/relief` (ReliefMapPage: filterable list, explicitly labelled demo data),
-  `/coordinator` (CoordinatorPage: 24 h team check-in summary + relief verification
-  status).
+  connectivity card, live + manual heat-risk plan, check-in buttons, nearby relief
+  list), `/relief` (ReliefMapPage: filterable list beside a Mapbox map, explicitly
+  labelled demo data), `/coordinator` (CoordinatorPage: 24 h team check-in summary +
+  relief verification status).
 - **Shell:** mobile-first layout with bottom navigation; four destinations max.
 - **Connectivity card:** the dashboard probes `GET /health` and shows an offline
   banner when the API is unreachable — vital for demo resilience and real networks.
-- **PWA:** `vite-plugin-pWA` generates the manifest and precaches the app shell so
-  reloads on flaky connections still render the UI (data is online-only; no
-  background sync in this phase).
+- **Location, only on purpose:** `useLocation()` asks the browser for a position when
+  the worker presses the button and never on page load. The coordinates live in that
+  hook's state — no storage write — and leave the device only in a request the worker
+  started (a weather lookup they asked for, or a check-in they sent). A denied prompt
+  falls back to the demo centre with an amber status, not an error screen.
+- **Map loading:** `features/relief-points/relief-map.tsx` is the only file that
+  imports `mapbox-gl`, and it is reached through `lazy()`. Because nothing else
+  pulls it in, the Mapbox runtime, its CSS and its worker are requested on `/relief`
+  alone — measured at 0 requests to `api.mapbox.com` from `/`, `/dashboard` and
+  `/coordinator`. Without a token the lazy chunk is never even fetched and the panel
+  explains itself instead.
+- **Markers are real controls:** each marker is a `<button>` with a descriptive
+  `aria-label`, and selection is mirrored through props so the list and the map
+  always agree. Mapbox rewrites a marker element that has no `role` of its own into
+  `role="img"`, which would hide the click from assistive tech, so the element
+  declares `role="button"` before Mapbox sees it. Selection restyles the existing
+  node instead of replacing it, which keeps keyboard focus on the marker the worker
+  just activated. Details open in a panel next to the map rather than a Mapbox popup.
+- **PWA:** `vite-plugin-pwa` generates the manifest and precaches the app shell only
+  (`index.html`, the manifest, the entry JS/CSS). Lazy route chunks are deliberately
+  left out of the precache — precaching everything would download the map on the home
+  page — and are cached on first use by a `CacheFirst` runtime rule. API calls stay
+  `NetworkFirst` with a 5 s timeout (data is online-only; no background sync).
 - **Typing:** all fetch calls are typed against `@heatshift/shared` schemas; runtime
   parsing at the client boundary makes the UI fail loudly, not silently, on drift.
 - `VITE_API_BASE_URL` is baked at **build** time (Vite static env), which is why the
@@ -285,16 +364,43 @@ The full plan object in the response is
 - API env is parsed by a Zod module (`apps/api/src/env.ts`) and the process exits
   immediately on invalid config — never a half-booted server.
 
-| Variable            | Used by | Purpose                                         |
-| ------------------- | ------- | ----------------------------------------------- |
-| `PORT`, `HOST`      | api     | Listen address (container binds `0.0.0.0:3000`) |
-| `CORS_ORIGIN`       | api     | Allowed browser origin(s)                       |
-| `DATABASE_URL`      | api     | postgres.js connection string                   |
-| `NODE_ENV`          | api     | Environment switch                              |
-| `LOG_LEVEL`         | api     | Fastify logger verbosity                        |
-| `MIGRATE_ON_BOOT`   | api     | Run migrations at container start               |
-| `SEED_ON_BOOT`      | api     | Run idempotent demo seed at container start     |
-| `VITE_API_BASE_URL` | web     | API base URL baked into the bundle              |
+| Variable                   | Used by | Purpose                                                              |
+| -------------------------- | ------- | -------------------------------------------------------------------- |
+| `PORT`, `HOST`             | api     | Listen address (container binds `0.0.0.0:3000`)                      |
+| `CORS_ORIGIN`              | api     | Allowed browser origin(s)                                            |
+| `DATABASE_URL`             | api     | postgres.js connection string                                        |
+| `NODE_ENV`                 | api     | Environment switch                                                   |
+| `LOG_LEVEL`                | api     | Fastify logger verbosity                                             |
+| `MIGRATE_ON_BOOT`          | api     | Run migrations at container start                                    |
+| `SEED_ON_BOOT`             | api     | Run idempotent demo seed at container start                          |
+| `VITE_API_BASE_URL`        | web     | API base URL baked into the bundle                                   |
+| `VITE_MAPBOX_ACCESS_TOKEN` | web     | Public, domain-restricted Mapbox token for the relief map. Optional. |
+
+### 8.1 The Mapbox token
+
+The token is a **public browser key** (`pk.…`), not a secret: it is visible in the
+JS bundle by design and is protected by URL authorisation configured in the Mapbox
+account, not by concealment. That said, it never enters the repository.
+
+- It lives only in the git-ignored root `.env`; `.env.example` documents the key with
+  an empty value.
+- `apps/web/vite.config.ts` sets `envDir` to the repository root, so `pnpm dev` reads
+  the same file `docker compose` interpolates. One value, one place, no dev/prod skew.
+- `.dockerignore` excludes `.env`, so the production build receives it as a Docker
+  `ARG` that Compose interpolates from the root file rather than a file copied into
+  the image. The web image does set it as `ENV` during the build stage, so the value
+  is readable from that stage's image config — acceptable for a domain-restricted
+  public key, and the reason the restriction is configured in the Mapbox account
+  instead of relying on the value staying hidden.
+- Vite inlines `import.meta.env.VITE_MAPBOX_ACCESS_TOKEN` as a literal at build time.
+  The eager entry chunk therefore contains the token string once (through the
+  `HAS_MAPBOX_TOKEN` boolean in `lib/constants.ts`) and again inside the lazy map
+  chunk. That is the expected shape of a public client key; the boolean exists so the
+  rest of the app never handles the value.
+- An empty token is a supported configuration, not a broken one: the relief list works
+  unchanged and the map area renders a fallback that says what is missing.
+
+No server-side Mapbox secret (no `sk.…`) is used anywhere in the project.
 
 ## 9. Build and CI
 
@@ -318,3 +424,25 @@ Rider taps "Need water"
 
 Every hop is validated against `packages/shared`, so rider, API and coordinator
 views cannot disagree about what `need_water` means.
+
+## 11. Data flow example: the live loop
+
+```
+Rider presses "Use my location for live heat risk"
+  -> browser geolocation prompt (first and only time the app asks)
+  -> web POST /api/v1/heat-risk/live { latitude, longitude, profile… }
+  -> Fastify: Zod parses the body (400 on violation)
+  -> weatherService.getConditions() in-process   (no loopback HTTP, see §4.1)
+       cache hit  -> stored observation + freshness.cached = true
+       cache miss -> https://api.open-meteo.com (6 s abort) -> Zod parse -> cache
+       failure    -> WEATHER_UNAVAILABLE 502/503; no plan is computed
+  -> heat-risk model (same function §6 uses) -> plan + weather + source
+  -> UI renders the plan, labelled "Live weather via Open-Meteo", observed <time>
+     (age from freshness.ageSeconds), and keeps the previous plan on screen if the
+     refresh fails
+```
+
+On `/relief` the same position orders the list: `GET /api/v1/relief-points` with
+`latitude`/`longitude` returns `distanceKm` nearest-first, and the Mapbox pane plots
+exactly those rows. The map is a view of the same response, never a second source of
+truth.

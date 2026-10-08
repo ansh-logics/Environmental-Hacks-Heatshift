@@ -5,8 +5,9 @@ import type {
   checkInSummaryResponseSchema,
   healthResponseSchema,
   heatLevelSchema,
+  heatRiskComputedSchema,
+  heatRiskLiveResponseSchema,
   heatRiskPreviewRequestSchema,
-  heatRiskPreviewResponseSchema,
   reliefPointTypeSchema,
   sunExposureSchema,
   workerRoleSchema,
@@ -28,7 +29,10 @@ export type HeatLevel = z.output<typeof heatLevelSchema>;
 
 export type ApiHealth = z.output<typeof healthResponseSchema>;
 export type HeatRiskInput = z.output<typeof heatRiskPreviewRequestSchema>;
-export type HeatRiskResult = z.output<typeof heatRiskPreviewResponseSchema>['data'];
+/** Model output, whichever endpoint produced it. */
+export type HeatRiskResult = z.output<typeof heatRiskComputedSchema>;
+/** The same plan plus the live observation it was built from. */
+export type HeatRiskLiveResult = z.output<typeof heatRiskLiveResponseSchema>['data'];
 export type CheckInSummary = z.output<typeof checkInSummaryResponseSchema>;
 
 /** Path/message pair surfaced to the UI when request or response validation fails. */

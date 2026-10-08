@@ -16,8 +16,21 @@ export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
 ).replace(/\/+$/, '');
 export const API_TIMEOUT_MS = 8000;
+/** The live call waits on a weather provider upstream, so it gets more room. */
+export const LIVE_HEAT_RISK_TIMEOUT_MS = 15000;
 /** Poll interval for the API connectivity indicator. */
 export const HEALTH_POLL_MS = 20000;
+
+/**
+ * Whether a public Mapbox browser token was present at build time. Only the
+ * boolean is exported; the token itself is read where the map is built. It is a
+ * public, domain-restricted key either way, and it comes from the ignored root
+ * .env - never from a value committed to the repository.
+ * An empty value is a supported state: the relief list still works and the map
+ * area renders a fallback instead of initialising.
+ */
+export const HAS_MAPBOX_TOKEN =
+  (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN?.trim() ?? '').length > 0;
 
 /** `label` fits the mobile bottom bar; `longLabel` is the desktop sidebar text. */
 export const NAV_ITEMS = [

@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import type { HeatRiskInput, SunExposure } from '@heatshift/shared';
+import type { HeatRiskInput, HeatRiskLiveRequest, SunExposure } from '@heatshift/shared';
 import { HEAT_RISK_PRESETS } from '../../lib/constants';
 import type { WorkerProfileDraft } from '../onboarding/profile';
 import { useHeatRiskPreview } from './use-heat-risk';
+import { useLiveHeatRisk } from './use-live-heat-risk';
 
 export type WeatherDraft = Pick<
   HeatRiskInput,
@@ -18,15 +19,30 @@ const DEFAULT_WEATHER: WeatherDraft = {
 export type PresetKey = keyof typeof HEAT_RISK_PRESETS;
 
 /**
- * Owns the heat-risk request for the whole dashboard: the greeting band's
- * primary action and the input panel drive the same state, so one run feeds
- * the plan, the snapshot and the safety card.
+ * Owns the heat-risk plan for the whole dashboard, from either source: the
+ * manual preview the worker types, or a live plan built from a position they
+ * agreed to share. One plan is on screen at a time, so the greeting band, the
+ * snapshot and the safety card can never disagree about which one it is.
+ *
+ * A live plan wins until the worker runs the manual check again, which drops it.
  */
 export function useShiftCheck(profile: WorkerProfileDraft) {
   const [weather, setWeatherState] = useState<WeatherDraft>(DEFAULT_WEATHER);
   const [activePreset, setActivePreset] = useState<PresetKey | null>(null);
   const [sunOverride, setSunOverride] = useState<SunExposure | null>(null);
-  const { result, error, loading, preview } = useHeatRiskPreview();
+  const {
+    result: manual,
+    error: manualError,
+    loading: manualLoading,
+    preview,
+  } = useHeatRiskPreview();
+  const {
+    result: live,
+    error: liveError,
+    loading: liveLoading,
+    runLive,
+    clearLive,
+  } = useLiveHeatRisk();
 
   const setWeather = useCallback((patch: Partial<WeatherDraft>) => {
     setWeatherState((current) => ({ ...current, ...patch }));
@@ -34,8 +50,9 @@ export function useShiftCheck(profile: WorkerProfileDraft) {
   }, []);
 
   const run = useCallback(
-    (override?: Partial<HeatRiskInput>) =>
-      preview({
+    (override?: Partial<HeatRiskInput>) => {
+      clearLive();
+      return preview({
         ...weather,
         sunExposure: sunOverride ?? profile.sunExposure,
         hoursInShift: profile.hoursInShift,
@@ -44,8 +61,9 @@ export function useShiftCheck(profile: WorkerProfileDraft) {
         shadeAccess: profile.shadeAccess,
         acclimatized: profile.acclimatized,
         ...override,
-      }),
-    [preview, profile, sunOverride, weather],
+      });
+    },
+    [clearLive, preview, profile, sunOverride, weather],
   );
 
   const applyPreset = useCallback(
@@ -64,15 +82,32 @@ export function useShiftCheck(profile: WorkerProfileDraft) {
     [run],
   );
 
+  /**
+   * The last manual plan stays on screen while the live one is in flight, then
+   * is replaced by it - a slow provider should not blank the card out.
+   */
+  const requestLive = useCallback(
+    (input: HeatRiskLiveRequest) => void runLive(input),
+    [runLive],
+  );
+
   return {
     weather,
     setWeather,
     activePreset,
     applyPreset,
     run,
-    result,
-    error,
-    loading,
+    requestLive,
+    result: live ?? manual,
+    /** Set only when the plan on screen came from live weather. */
+    liveResult: live,
+    liveLoading,
+    /** The manual panel must not look busy while only a live request is running. */
+    manualLoading,
+    /** Kept apart from the manual error so each card reports its own failure. */
+    liveError,
+    error: manualError,
+    loading: liveLoading || manualLoading,
     sunExposure: sunOverride ?? profile.sunExposure,
   };
 }

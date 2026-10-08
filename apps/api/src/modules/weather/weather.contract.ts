@@ -1,29 +1,31 @@
+import type { SunExposure, WeatherFreshness, WeatherProviderId } from '@heatshift/shared';
+
 /**
- * Weather provider contract — intentionally NOT wired to any HTTP call yet.
- *
- * The heat-risk endpoint currently receives observations from the caller
- * (see POST /api/v1/heat-risk/preview). When a free provider is integrated,
- * implement this interface in weather.provider.ts and feed its output into
- * HeatRiskInput. No route is registered from this module on purpose, because
- * the API must not fake live weather.
+ * Weather module boundary. The HTTP layer only ever talks to a `WeatherProvider`,
+ * never to a vendor API directly, so the heat-risk model stays independent of
+ * whichever provider is configured.
  */
 export type WeatherObservation = {
-  location: { latitude: number; longitude: number; label: string };
+  provider: WeatherProviderId;
+  /** Coordinates actually sent upstream (the provider's own grid snap). */
+  location: { latitude: number; longitude: number };
+  /** True instant of the observation as UTC ISO-8601. */
   observedAt: string;
   temperatureC: number;
   humidityPercent: number;
   windSpeedKmh: number;
-  /** Derived hint for the heat-risk model. */
-  sunExposure: 'full_sun' | 'partial_shade' | 'deep_shade' | 'indoor';
+  cloudCoverPercent: number | null;
+  /** Derived hint: the heat-risk model needs sun load, not cloud %. */
+  sunExposure: SunExposure;
+};
+
+export type WeatherLookup = {
+  observation: WeatherObservation;
+  freshness: WeatherFreshness;
 };
 
 export type WeatherProvider = {
-  readonly id: 'open-meteo' | 'imap' | 'other-free';
-  fetchObservation(input: {
-    latitude: number;
-    longitude: number;
-  }): Promise<WeatherObservation>;
+  readonly id: WeatherProviderId;
+  /** Resolves from cache when fresh; rejects with `WeatherUpstreamError` otherwise. */
+  lookup(input: { latitude: number; longitude: number }): Promise<WeatherLookup>;
 };
-
-export const WEATHER_PROVIDER_NOT_CONFIGURED =
-  'No weather provider is configured. Send observations to POST /api/v1/heat-risk/preview.';

@@ -48,7 +48,8 @@ internal — into one shape:
 | 404         | `NOT_FOUND`           | Unknown route or missing resource.                                                |
 | 422         | `UNPROCESSABLE`       | Syntactically valid but semantically rejected (e.g. out-of-range weather inputs). |
 | 500         | `INTERNAL_ERROR`      | Unhandled server failure. `message` is generic; no stack leak.                    |
-| 503         | `SERVICE_UNAVAILABLE` | Dependency down (e.g. database unreachable from a handler).                       |
+| 502         | `WEATHER_UNAVAILABLE` | The upstream weather provider was unreachable, errored, or sent unusable data.    |
+| 503         | `WEATHER_UNAVAILABLE` | The provider did not answer within the 6 s budget; retry shortly.                 |
 
 Rules: `code` is a stable machine-readable SCREAMING_SNAKE_CASE string; `message`
 is human-readable and safe to show; `details` is optional and only present when
@@ -61,6 +62,12 @@ Responses that include seeded relief-point data carry `meta.demo = true`. The
 seeded Delhi relief dataset is **demo data**: entries are illustrative, not
 verified physical locations. Clients must surface this (the web app labels the
 relief screens accordingly).
+
+Weather is **not** demo data. `GET /api/v1/weather/conditions` and
+`POST /api/v1/heat-risk/live` return real Open-Meteo observations, and a provider
+failure is reported as one rather than being filled in with invented numbers. The
+distinction the UI has to keep straight is that a real base map under demo
+markers is still demo markers.
 
 ---
 
@@ -102,15 +109,23 @@ Unversioned.
 ## 3. `GET /api/v1/relief-points`
 
 List relief locations (water, shade, clinics, cooling spaces, canteens). Results
-come from the seeded dataset — **demo data**, flagged by `meta.demo`.
+come from the seeded dataset — **demo data**, flagged by `meta.demo`. When the
+request carries a position, each row also carries its straight-line distance and
+the list comes back nearest-first.
 
 ### Query parameters (all optional)
 
-| Param          | Type                                                          | Default   | Constraints                                                         |
-| -------------- | ------------------------------------------------------------- | --------- | ------------------------------------------------------------------- |
-| `type`         | one of `water`, `shade`, `clinic`, `cooling_space`, `canteen` | all types | Single value; repeat with comma-separated list not supported in v1. |
-| `verifiedOnly` | boolean                                                       | `false`   | Parsed from `"true"`/`"false"` strings.                             |
-| `limit`        | integer                                                       | `20`      | 1–100.                                                              |
+| Param          | Type                                                          | Default   | Constraints                                                  |
+| -------------- | ------------------------------------------------------------- | --------- | ------------------------------------------------------------ |
+| `type`         | one of `water`, `shade`, `clinic`, `cooling_space`, `canteen` | all types | Single value; comma-separated lists are not supported in v1. |
+| `verifiedOnly` | boolean                                                       | `false`   | Parsed from `"true"`/`"false"` strings.                      |
+| `limit`        | integer                                                       | `50`      | 1–200.                                                       |
+| `latitude`     | number                                                        | —         | −90 to 90. Must be sent together with `longitude`.           |
+| `longitude`    | number                                                        | —         | −180 to 180. Must be sent together with `latitude`.          |
+
+`latitude`/`longitude` are the caller's position, not a filter: every point in the
+city is still a candidate, just re-ranked by how far it is. Sending one without the
+other is a `400`, because a lone coordinate is not usable.
 
 ### Response `200`
 
@@ -119,28 +134,40 @@ come from the seeded dataset — **demo data**, flagged by `meta.demo`.
   "data": [
     {
       "id": "8f2c1e9a-4b7d-4a10-9c3f-2d5e6a7b8c9d",
-      "name": "Municipal Water Point - Connaught Place",
+      "name": "Drinking water point - Connaught Place",
       "type": "water",
       "latitude": 28.6315,
       "longitude": 77.2167,
       "address": "Near Inner Circle, New Delhi",
-      "verified": false,
+      "verified": true,
       "openingHours": "07:00-20:00",
-      "createdAt": "2026-10-08T04:00:00.000Z"
+      "createdAt": "2026-10-08T04:00:00.000Z",
+      "distanceKm": 0.042
     }
   ],
-  "meta": { "demo": true, "count": 1 }
+  "count": 1,
+  "meta": { "demo": true, "source": "Delhi demo seed (2026-05) — positions are approximate" }
 }
 ```
 
 `data[]` items follow the `relief_points` shape: `id` (uuid), `name` (string),
 `type` (enum above), `latitude`/`longitude` (number, WGS84), `address` (string),
-`verified` (boolean), `openingHours` (string | null), `createdAt` (ISO 8601).
+`verified` (boolean), `openingHours` (string), `createdAt` (ISO 8601).
+
+| Field        | Type    | Notes                                                                                                     |
+| ------------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| `distanceKm` | number? | Haversine (straight-line) km from the request position, 3 decimals. **Absent** when no position was sent. |
+| `count`      | integer | Rows returned, at the top level next to `data`.                                                           |
+| `meta.demo`  | `true`  | Always present for this endpoint — the dataset is seeded.                                                 |
+
+Ordering without a position is verified-points-first then by name; with a position it
+is ascending `distanceKm`. Distances are geometry, not a routing estimate, and the
+points they are measured to are demo entries.
 
 ### Errors
 
 - `400 VALIDATION_ERROR` — bad `type`, non-boolean `verifiedOnly`, `limit` outside
-  1–100.
+  1–200, out-of-range coordinate, or `latitude`/`longitude` sent separately.
 
 ---
 
@@ -242,36 +269,38 @@ hours plus the most recent check-ins.
 ### Errors
 
 - `400 VALIDATION_ERROR` — malformed `userId`, `limit` out of range.
-- `503 SERVICE_UNAVAILABLE` — database unreachable.
+- `500 INTERNAL_ERROR` — the query failed (database unreachable). `/health` reports
+  the same condition as `degraded` rather than failing.
 
 ---
 
 ## 6. `POST /api/v1/heat-risk/preview`
 
-Compute the personal heat-risk score and work/rest/hydration plan. Weather inputs
-are supplied by the request because no weather provider is wired in this phase
-(the `weather` API module is a contract-only placeholder with no route).
+Compute the personal heat-risk score and work/rest/hydration plan from weather the
+caller supplies. This is the manual path the dashboard uses when a worker would
+rather type their city and shift answers than share a position; §8 is the same
+model fed by live observations.
 
 ### Request body (all fields required unless noted)
 
-| Field             | Type                                | Constraints                                                                            |
-| ----------------- | ----------------------------------- | -------------------------------------------------------------------------------------- |
-| `temperatureC`    | number                              | −20 to 60                                                                              |
-| `humidityPercent` | number                              | 1 to 100                                                                               |
-| `windSpeedKmh`    | number                              | 0 to 200                                                                               |
-| `sunExposure`     | `"direct" \| "partial" \| "shade"`  | —                                                                                      |
-| `hoursInShift`    | number                              | 0.5 to 16                                                                              |
-| `workType`        | string                              | e.g. `delivery_rider`, `security_guard`, `construction`, `street_vendor`, `sanitation` |
-| `waterAccess`     | `"none" \| "limited" \| "reliable"` | —                                                                                      |
-| `shadeAccess`     | `"none" \| "limited" \| "reliable"` | —                                                                                      |
-| `acclimatized`    | boolean                             | —                                                                                      |
+| Field             | Type                                                                                                   | Required | Constraints                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------- |
+| `temperatureC`    | number                                                                                                 | yes      | −10 to 60                                                         |
+| `humidityPercent` | number                                                                                                 | yes      | 0 to 100                                                          |
+| `windSpeedKmh`    | number                                                                                                 | yes      | 0 to 150                                                          |
+| `sunExposure`     | `"full_sun" \| "partial_shade" \| "deep_shade" \| "indoor"`                                            | yes      | Enum; the worker's own answer about what they are standing under. |
+| `hoursInShift`    | number                                                                                                 | yes      | 0.5 to 16                                                         |
+| `workType`        | `"delivery_rider" \| "security_guard" \| "construction" \| "street_vendor" \| "sanitation" \| "other"` | yes      | Enum; sets the model's work-intensity multiplier.                 |
+| `waterAccess`     | `"none" \| "limited" \| "reliable"`                                                                    | yes      | —                                                                 |
+| `shadeAccess`     | `"none" \| "limited" \| "reliable"`                                                                    | no       | Defaults to `limited`.                                            |
+| `acclimatized`    | boolean                                                                                                | no       | Defaults to `true`.                                               |
 
 ```json
 {
   "temperatureC": 38,
   "humidityPercent": 45,
   "windSpeedKmh": 8,
-  "sunExposure": "direct",
+  "sunExposure": "full_sun",
   "hoursInShift": 8,
   "workType": "delivery_rider",
   "waterAccess": "limited",
@@ -328,27 +357,27 @@ are supplied by the request because no weather provider is wired in this phase
     },
     "meta": {
       "demo": true,
-      "source": "HeatShift WBGT model v0.1 (no live weather provider yet)"
+      "source": "HeatShift WBGT model v0.1 with caller-supplied observations"
     }
   }
 }
 ```
 
-| Field                                              | Type                                        | Notes                                                                              |
-| -------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `wbgtC`                                            | number                                      | Simplified WBGT estimate, 1 decimal (see architecture §6).                         |
-| `score`                                            | integer 0–100                               | Monotonic in WBGT; UI-facing severity dial.                                        |
-| `level`                                            | `"low" \| "moderate" \| "high" \| "severe"` | WBGT bands: ≤28 low, 28–30 moderate, 30–32.5 high, >32.5 severe.                   |
-| `label`                                            | string                                      | Human-readable level text.                                                         |
-| `headline`                                         | string                                      | One-sentence instruction shown under the score.                                    |
-| `factors[]`                                        | `{ factor, impact }`                        | "Why this score" rows, rendered in a `<details>` block.                            |
-| `input`                                            | object                                      | Echo of the validated request (defaults applied).                                  |
-| `meta`                                             | `{ demo: true, source }`                    | Model version marker: no live weather provider is used.                            |
-| `plan.workMinutesPerCycle` / `restMinutesPerCycle` | integer ≥ 0                                 | Baseline per level, modified by intensity, water/shade access and acclimatisation. |
-| `plan.waterMlPerHour`                              | integer                                     | Hydration target.                                                                  |
-| `plan.maxRecommendedShiftMinutes`                  | integer                                     | Ceiling for today's exposure.                                                      |
-| `plan.unsafeStartHour`                             | integer 0–23                                | Local hour after which starting the shift is unsafe at this level.                 |
-| `plan.advice`                                      | string[]                                    | Plain-language bullets, rendered directly by the UI.                               |
+| Field                                              | Type                                        | Notes                                                                                     |
+| -------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `wbgtC`                                            | number                                      | Simplified WBGT estimate, 1 decimal (see architecture §6).                                |
+| `score`                                            | integer 0–100                               | Monotonic in WBGT; UI-facing severity dial.                                               |
+| `level`                                            | `"low" \| "moderate" \| "high" \| "severe"` | WBGT bands: ≤28 low, 28–30 moderate, 30–32.5 high, >32.5 severe.                          |
+| `label`                                            | string                                      | Human-readable level text.                                                                |
+| `headline`                                         | string                                      | One-sentence instruction shown under the score.                                           |
+| `factors[]`                                        | `{ factor, impact }`                        | "Why this score" rows, rendered in a `<details>` block.                                   |
+| `input`                                            | object                                      | Echo of the validated request (defaults applied).                                         |
+| `meta`                                             | `{ demo: true, source }`                    | Says which model ran and that the observations were supplied by the caller, not observed. |
+| `plan.workMinutesPerCycle` / `restMinutesPerCycle` | integer ≥ 0                                 | Baseline per level, modified by intensity, water/shade access and acclimatisation.        |
+| `plan.waterMlPerHour`                              | integer                                     | Hydration target.                                                                         |
+| `plan.maxRecommendedShiftMinutes`                  | integer                                     | Ceiling for today's exposure.                                                             |
+| `plan.unsafeStartHour`                             | integer 0–23                                | Local hour after which starting the shift is unsafe at this level.                        |
+| `plan.advice`                                      | string[]                                    | Plain-language bullets, rendered directly by the UI.                                      |
 
 ### Errors
 
@@ -359,24 +388,155 @@ are supplied by the request because no weather provider is wired in this phase
 
 ---
 
-## 7. Endpoint summary
+## 7. `GET /api/v1/weather/conditions`
 
-| Method | Path                        | Purpose                                        | Auth                  |
-| ------ | --------------------------- | ---------------------------------------------- | --------------------- |
-| GET    | `/health`                   | Service + database status                      | none                  |
-| GET    | `/api/v1/relief-points`     | Filterable relief list (demo data)             | none                  |
-| POST   | `/api/v1/check-ins`         | Create check-in (mock identity)                | none (userId in body) |
-| GET    | `/api/v1/check-ins/summary` | 24 h totals + recent, optionally per user      | none                  |
-| POST   | `/api/v1/heat-risk/preview` | Risk score + plan from supplied weather inputs | none                  |
+Real, current conditions for one position, fetched from Open-Meteo by our API. No
+key is required by the provider, and none is exposed to clients.
+
+### Query parameters
+
+| Param       | Type   | Required | Constraints |
+| ----------- | ------ | -------- | ----------- |
+| `latitude`  | number | yes      | −90 to 90   |
+| `longitude` | number | yes      | −180 to 180 |
+
+### Response `200`
+
+```json
+{
+  "data": {
+    "temperatureC": 30.2,
+    "humidityPercent": 55,
+    "windSpeedKmh": 7.2,
+    "cloudCoverPercent": 3,
+    "sunExposure": "full_sun",
+    "observedAt": "2026-10-08T13:15:00.000Z",
+    "provider": "open-meteo",
+    "location": { "latitude": 28.5764, "longitude": 77.1868 },
+    "freshness": {
+      "provider": "open-meteo",
+      "fetchedAt": "2026-10-08T13:16:33.684Z",
+      "observedAt": "2026-10-08T13:15:00.000Z",
+      "ageSeconds": 0,
+      "cacheTtlSeconds": 600,
+      "cached": false,
+      "cacheCell": "28.6,77.2",
+      "cacheScope": "per-process"
+    },
+    "source": "Live weather via Open-Meteo"
+  }
+}
+```
+
+| Field                  | Type                       | Notes                                                                                                      |
+| ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `cloudCoverPercent`    | number \| null             | Null when the provider has no cloud reading for the grid point.                                            |
+| `sunExposure`          | enum, as §6                | **Derived** from cloud cover (<20 % full sun, <70 % partial, else deep shade). A hint, not an observation. |
+| `observedAt`           | ISO 8601 (UTC)             | The provider reports local wall-clock; the offset it returns is applied so this is a true instant.         |
+| `location`             | `{ latitude, longitude }`  | The provider's own grid point (~0.25°), which is not the position that was asked for.                      |
+| `freshness.cached`     | boolean                    | Served from this process's memory rather than a fresh upstream call.                                       |
+| `freshness.cacheCell`  | string, e.g. `"28.6,77.2"` | The coarse 0.1° cache bucket. Never the exact coordinates.                                                 |
+| `freshness.cacheScope` | `"per-process"`            | A literal, so clients can see the limitation rather than assume a shared cache.                            |
+
+### Errors
+
+- `400 VALIDATION_ERROR` — missing or out-of-range coordinate.
+- `502 WEATHER_UNAVAILABLE` — provider unreachable, non-2xx, or a payload that did
+  not parse. `message` says which, and no numbers are invented.
+- `503 WEATHER_UNAVAILABLE` — provider did not answer within 6 s.
+
+---
+
+## 8. `POST /api/v1/heat-risk/live`
+
+The same model as §6, fed by §7. The caller sends a position plus the worker's
+profile; the server fetches the observation. This is what the dashboard runs when a
+worker presses "Use my location for live heat risk".
+
+### Request body
+
+Identical to §6 **minus** `temperatureC`, `humidityPercent` and `windSpeedKmh`,
+**plus** the position:
+
+| Field         | Type   | Required | Constraints                                                                        |
+| ------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
+| `latitude`    | number | yes      | −90 to 90                                                                          |
+| `longitude`   | number | yes      | −180 to 180                                                                        |
+| `sunExposure` | enum   | yes      | The worker's own answer wins over the cloud-derived hint.                          |
+| …             |        |          | `hoursInShift`, `workType`, `waterAccess`, `shadeAccess`, `acclimatized` as in §6. |
+
+```json
+{
+  "latitude": 28.5494,
+  "longitude": 77.2632,
+  "sunExposure": "full_sun",
+  "hoursInShift": 8,
+  "workType": "delivery_rider",
+  "waterAccess": "limited",
+  "shadeAccess": "none",
+  "acclimatized": true
+}
+```
+
+### Response `200`
+
+`data` is the §6 shape (`wbgtC`, `score`, `level`, `label`, `headline`, `plan`,
+`factors`, `input`) with four provenance fields instead of `meta`:
+
+```json
+{
+  "data": {
+    "...": "the heat-risk result fields from §6",
+    "weather": { "...": "the §7 data object, verbatim" },
+    "coordinates": { "latitude": 28.5494, "longitude": 77.2632 },
+    "source": "Live weather via Open-Meteo",
+    "model": "HeatShift WBGT model v0.1"
+  }
+}
+```
+
+| Field         | Type   | Notes                                                                                                    |
+| ------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| `weather`     | object | Exactly what §7 returns, so the UI can show the observation the plan was built from.                     |
+| `coordinates` | object | The position that was queried — the client's, not the provider's grid snap (that is `weather.location`). |
+| `source`      | string | Where the numbers came from. Rendered next to the plan.                                                  |
+| `model`       | string | That the weather is live does not make the maths anything other than the documented heuristic.           |
+
+`input` echoes the observation and profile the model actually received, so a
+response is auditable on its own. There is deliberately **no `meta.demo`** here: the
+weather is real. Relief points stay demo data and say so through their own endpoint.
+
+### Errors
+
+- `400 VALIDATION_ERROR` — §6's rules plus a missing or out-of-range position.
+- `502` / `503` `WEATHER_UNAVAILABLE` — as §7. The plan is not computed at all.
+
+---
+
+## 9. Endpoint summary
+
+| Method | Path                         | Purpose                                             | Auth                  |
+| ------ | ---------------------------- | --------------------------------------------------- | --------------------- |
+| GET    | `/health`                    | Service + database status                           | none                  |
+| GET    | `/api/v1/relief-points`      | Filterable relief list, optionally distance-ordered | none                  |
+| POST   | `/api/v1/check-ins`          | Create check-in (mock identity)                     | none (userId in body) |
+| GET    | `/api/v1/check-ins/summary`  | 24 h totals + recent, optionally per user           | none                  |
+| POST   | `/api/v1/heat-risk/preview`  | Risk score + plan from supplied weather inputs      | none                  |
+| GET    | `/api/v1/weather/conditions` | Live Open-Meteo observation for a position          | none                  |
+| POST   | `/api/v1/heat-risk/live`     | Risk score + plan from live weather at a position   | none                  |
 
 No endpoint requires credentials in this phase; authentication is a non-goal and
-arranges itself in front of `check-ins` and `relief-points` write paths later.
+arranges itself in front of `check-ins` and `relief-points` write paths later. The
+two weather endpoints are unauthenticated too, which is acceptable while they are
+read-only and rate-limited only by the caller's own interest — a public deployment
+would need throttling before anything else.
 
-## 8. Contract evolution notes
+## 10. Contract evolution notes
 
-- The `weather` module will introduce `GET /api/v1/weather/conditions` when a free
-  provider is wired; `heat-risk/preview` will then gain an optional
-  `{ locationId }` mode that fetches inputs server-side. The request-supplied-inputs
-  mode documented above stays valid, so clients need no change.
+- `GET /api/v1/weather/conditions` and `POST /api/v1/heat-risk/live` were the
+  additive change this phase, exactly as previously forecast in this section. The
+  caller-supplied-inputs mode of §6 stayed untouched, so no existing client changed.
+- A shared (Redis) weather cache would let `freshness.cacheScope` grow a second
+  value; clients should treat that field as informational, not assert on it.
 - Any response gaining fields is additive and v1-safe; any field changing type or
   disappearing is a v2 event.

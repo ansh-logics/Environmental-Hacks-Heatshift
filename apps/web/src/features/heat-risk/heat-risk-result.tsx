@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { HeatLevel, HeatRiskResult } from '@heatshift/shared';
 import { Badge, type BadgeTone } from '../../components/ui/badge';
 import { Card } from '../../components/ui/card';
@@ -99,8 +100,17 @@ export function HeatRiskLoadingCard() {
 /**
  * Mounts when a real result arrives, so the entrance plays exactly once per
  * plan - editing a field or re-running never replays it.
+ *
+ * `provenance` replaces the demo disclaimer when the plan came from live
+ * weather, because at that point the observations are not demo data.
  */
-export function HeatRiskResultCard({ result }: { result: HeatRiskResult }) {
+export function HeatRiskResultCard({
+  result,
+  provenance,
+}: {
+  result: HeatRiskResult;
+  provenance?: ReactNode;
+}) {
   const { plan } = result;
 
   return (
@@ -170,7 +180,7 @@ export function HeatRiskResultCard({ result }: { result: HeatRiskResult }) {
           </ul>
         </Disclosure>
 
-        <DemoNotice className="mt-3" />
+        {provenance ?? <DemoNotice className="mt-3" />}
       </Card>
     </Reveal>
   );

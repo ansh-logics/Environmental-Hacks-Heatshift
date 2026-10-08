@@ -14,6 +14,8 @@ import { ErrorNote } from '../components/shared/error-note';
 import { IconPin, RELIEF_ICONS } from '../components/ui/icons';
 import { ReliefPointList } from '../features/relief-points/relief-point-list';
 import { ReliefContextPanel } from '../features/relief-points/relief-context-panel';
+import { ReliefMapSection } from '../features/relief-points/relief-map-section';
+import { RELIEF_MARKER_COLOURS } from '../features/relief-points/relief-marker';
 import {
   useReliefPoints,
   withDistances,
@@ -24,8 +26,9 @@ import { cn } from '../lib/utils';
 type Filter = ReliefPointType | 'all';
 
 /**
- * List-first relief view. A real map is deliberately out of scope: distance,
- * hours and verification status matter more to a rider than a tile layer.
+ * List and map, together. The list stays the reliable view - distance, hours and
+ * verification status matter more to a rider than a tile layer - and the Mapbox
+ * pane mirrors it: same filters, same distances, same selection.
  */
 export function ReliefMapPage() {
   const location = useLocation();
@@ -33,10 +36,14 @@ export function ReliefMapPage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const usingDevice = location.source === 'device';
   const { points, loading, error, reload, source } = useReliefPoints({
     type: filter === 'all' ? undefined : filter,
     verifiedOnly: verifiedOnly || undefined,
     limit: 100,
+    // Only a position the worker granted is sent to the API. The demo centre is
+    // our own stand-in, so ordering by it would imply knowledge we do not have.
+    origin: usingDevice ? location.coords : undefined,
   });
 
   const nearby = useMemo(
@@ -62,13 +69,17 @@ export function ReliefMapPage() {
             <Button
               variant="secondary"
               onClick={location.useDeviceLocation}
-              loading={location.requesting}
+              loading={location.status === 'locating'}
             >
               <IconPin size={18} />
-              My location
+              Use my location
             </Button>
           }
         />
+        <p className="mt-1 max-w-prose text-xs leading-snug text-ink-500">
+          The browser asks for your position only when you press that button. It is used
+          to order this page and nothing is stored.
+        </p>
       </GridColumn>
 
       <GridColumn span={7} className="space-y-4">
@@ -102,7 +113,10 @@ export function ReliefMapPage() {
               const Icon = RELIEF_ICONS[type];
               return (
                 <li key={type} className="flex items-center gap-2 text-sm text-ink-700">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sand-100 text-heat-accent">
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sand-100"
+                    style={{ color: RELIEF_MARKER_COLOURS[type] }}
+                  >
                     <Icon size={16} />
                   </span>
                   {RELIEF_POINT_TYPE_LABELS[type]}
@@ -140,9 +154,15 @@ export function ReliefMapPage() {
       </GridColumn>
 
       <GridColumn span={5} className="space-y-4">
+        <ReliefMapSection
+          points={nearby}
+          selectedId={selected?.id ?? null}
+          origin={location.coords}
+          hasDeviceLocation={usingDevice}
+          onSelect={(point) => setSelectedId(point.id)}
+        />
         <ReliefContextPanel
           point={selected}
-          origin={location.coords}
           locationLabel={location.label}
           locationSource={location.source}
         />

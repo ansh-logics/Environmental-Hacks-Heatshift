@@ -36,12 +36,31 @@ the shift they already have_, not a warning they cannot act on.
    numbers: work minutes per cycle, rest minutes per cycle, water ml per hour,
    a maximum recommended shift length, and a safe start hour.
 3. **Nearby relief locations.** A searchable, filterable list of water points,
-   shaded areas, clinics, cooling spaces and canteens.
-   **The seeded relief dataset for Delhi is DEMO data.** Nothing in this phase is
-   verified against physical sites in production.
+   shaded areas, clinics, cooling spaces and canteens, ordered by straight-line
+   distance from wherever the worker is standing, plotted on a real map.
+   **The seeded relief dataset for Delhi is DEMO data.** The map underneath them is
+   real; the points on it are not verified against physical sites.
 4. **Coordinator view.** Team leads and NGO workers see aggregated check-in status
    (okay / need water / need break / unwell) for the last 24 hours and which relief
    points are still unverified.
+
+## 3.1 What is real, and what is still demo
+
+Reviewers keep asking this, so it is stated once here and mirrored on screen.
+
+| Capability                       | Status          | What that means in practice                                                                                                                   |
+| -------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Weather behind the plan          | **Implemented** | Live conditions come from Open-Meteo through our own API. Nothing is simulated, and a provider failure is reported as one — never backfilled. |
+| Heat-risk model                  | **Implemented** | The documented WBGT formula in `docs/architecture.md` §6, run in-process for both manual and live paths.                                      |
+| Map of relief points             | **Implemented** | A real Mapbox GL base map with pan, zoom and selectable markers, behind a public domain-restricted token.                                     |
+| Relief point dataset             | **Demo**        | Seeded Delhi rows. Positions are approximate and most are unverified. A real map layer does not make an entry a place you can find.           |
+| Worker identity / authentication | **Not built**   | Mock seeded user IDs. No login, no sessions, no per-user authorisation on any endpoint.                                                       |
+| Distances                        | **Computed**    | Haversine from the position the worker granted (or the demo centre), so they are honest as geometry and only as good as the point data.       |
+| Offline data                     | **Partial**     | The app shell and route chunks are cached; weather and relief data are network-first and need a connection.                                   |
+| Check-in location storage        | **Explicit**    | Coordinates are stored only when the worker sends a check-in that carries them. Browsing with a location never persists it.                   |
+
+The rule the UI follows: anything seeded or demo is labelled on screen, and the live
+plan says which provider produced it and when it observed the weather.
 
 ## 4. Target users and device reality
 
@@ -59,11 +78,19 @@ the shift they already have_, not a warning they cannot act on.
 ### 5.1 Delivery rider (worker)
 
 1. Opens the app before the lunch peak.
-2. Sees the heat-risk card: score, level, and the plan ("work 25 min / rest 10 min,
-   750 ml water per hour, stop by 18:00").
+2. Taps "Use my location for live heat risk". The browser asks for permission at
+   that moment — not on page load — and the app fetches the weather for that spot
+   and rebuilds the plan: score, level, and the concrete numbers ("work 25 min /
+   rest 35 min, 750 ml water per hour, do not start after 12:00"), labelled with the
+   provider and the observation time.
 3. Taps one check-in button during the shift ("Okay", "Need water", "Need break",
    "Unwell") — optional location attached if granted.
-4. On the relief screen, filters by "Water" and walks to the nearest listed point.
+4. On the relief screen, filters by "Water" and taps the nearest point on the map or
+   in the list; both select the same point and show its distance and opening hours.
+
+If the worker denies the location prompt, nothing breaks: the plan keeps working from
+the city and shift answers they typed, distances fall back to the demo centre, and the
+status chip says so in amber rather than red.
 
 ### 5.2 NGO field coordinator
 
@@ -79,29 +106,32 @@ Deliberately out of scope, listed so reviewers do not judge the prototype agains
 them and so the next phase has an explicit backlog:
 
 - **No authentication.** A temporary mock identity (seeded user IDs) is used. No
-  passwords, OTPs, or sessions.
-- **No maps.** Relief locations are presented as a list with distances and
-  addresses, not a rendered map.
+  passwords, OTPs, or sessions. Every endpoint is open.
 - **No AI features.** The risk model is a transparent, documented formula (see
   `docs/architecture.md`), not a learned model.
-- **No live weather provider.** The heat-risk preview endpoint takes weather inputs
-  directly from the client. A free provider integration is planned; until then the
-  API contract keeps a weather module as a contract-only placeholder.
-- **No offline data sync.** The PWA shell caches for reloads; writes are online-only.
-- **No paid APIs.** Every data source used or planned is free-tier.
+- **No relief-point verification workflow.** The coordinator screen shows which
+  entries are unverified; it does not let anyone confirm one on the ground.
+- **No offline data sync.** The PWA shell and route chunks cache for reloads;
+  weather and relief data are network-first and writes are online-only.
+- **No routing or turn-by-turn directions.** Distances are straight-line, because a
+  distance the worker can sanity-check is better than a route we cannot verify.
+- **No paid data dependency.** Weather is Open-Meteo, which needs no key. The base
+  map uses a Mapbox public token on its free request allowance; without a token the
+  app still works and the map area explains itself (see `README.md`).
 - **No deployments.** AWS is documented as a target architecture only
   (`docs/aws-deployment-plan.md`, `infra/aws/`). Nothing is deployed in this phase.
 
 ## 7. Success criteria for the foundation phase
 
-| Criterion                                | Measure                                                                                              |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| End-to-end path works locally            | `docker compose up --build` yields a usable app in one command                                       |
-| Risk plan is actionable                  | Every preview response includes work/rest/water numbers, not just a score                            |
-| API contract is a single source of truth | All request/response shapes live in `packages/shared` as Zod schemas                                 |
-| Demo credibility                         | Every screen showing seed data labels it as demo data                                                |
-| Mobile reality                           | Bottom navigation, one-handed reachability, large targets, high contrast                             |
-| API contract                             | All shapes defined once in `packages/shared`; versioned under `/api/v1` with a single error envelope |
+| Criterion                                | Measure                                                                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| End-to-end path works locally            | `docker compose up --build` yields a usable app in one command                                                       |
+| Core loop is real, not staged            | Granted location -> our API fetches live weather -> our model rebuilds the plan -> map shows distance-ordered relief |
+| Risk plan is actionable                  | Every preview response includes work/rest/water numbers, not just a score                                            |
+| API contract is a single source of truth | All request/response shapes live in `packages/shared` as Zod schemas                                                 |
+| Demo credibility                         | Every screen showing seed data labels it as demo data                                                                |
+| Mobile reality                           | Bottom navigation, one-handed reachability, large targets, high contrast                                             |
+| API contract                             | All shapes defined once in `packages/shared`; versioned under `/api/v1` with a single error envelope                 |
 
 ## 8. Data behind the product
 
@@ -118,23 +148,25 @@ Four tables cover the phase (`users`, `worker_profiles`, `relief_points`, `check
 
 ## 9. Roadmap beyond this phase
 
-1. Wire a free weather provider into the existing `weather` module contract.
+1. Move the relief dataset from demo to verified: an on-ground workflow where a
+   coordinator records a visit and flips `verified` with an audit trail.
 2. Add Hindi copy behind a language switch.
 3. Replace mock identity with OTP-based auth (mobile numbers, not email).
-4. On-ground verification workflow to move relief points from demo to verified.
+4. Share the weather cache across instances (Redis) before running more than one API
+   replica — today the cache is per process.
 5. Push notifications / SMS nudges at shift start and at risk-level changes.
 6. Deploy per `docs/aws-deployment-plan.md` (staging, then production).
 
 ## 10. Constraints and risks
 
-| Constraint / risk                                   | Mitigation in this phase                                                                                |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Workers will not read long text mid-shift           | Plan is 3–5 short bullets plus numbers; everything else is behind a tap                                 |
-| Weather inputs are manual until a provider is wired | Preview endpoint contract is provider-agnostic; integration is additive (see `docs/api-contract.md` §8) |
-| Demo relief data could be mistaken for real         | `meta.demo = true` in every relief response + explicit on-screen labelling                              |
-| No auth invites misuse of check-ins                 | Accepted trade-off for a mock-identity demo; OTP auth is roadmap item 3                                 |
-| Low-end device performance                          | Small bundle, few network calls per screen, no map tiles, no heavy charts                               |
-| Sunlight legibility                                 | High-contrast tokens, large type, large tap targets enforced by the mobile shell                        |
+| Constraint / risk                           | Mitigation in this phase                                                                                                                           |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workers will not read long text mid-shift   | Plan is 3–5 short bullets plus numbers; everything else is behind a tap                                                                            |
+| Live weather depends on an upstream service | Our API owns the fetch, validates the provider response with Zod, caches briefly, and surfaces failures as failures — it never substitutes numbers |
+| Demo relief data could be mistaken for real | `meta.demo = true` in every relief response + explicit on-screen labelling, including on the map                                                   |
+| No auth invites misuse of check-ins         | Accepted trade-off for a mock-identity demo; OTP auth is roadmap item 3                                                                            |
+| Low-end device performance                  | Small shell, few network calls per screen; the map bundle is lazy and never loads outside `/relief`                                                |
+| Sunlight legibility                         | High-contrast tokens, large type, large tap targets enforced by the mobile shell                                                                   |
 
 ## 11. Glossary
 

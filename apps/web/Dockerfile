@@ -17,6 +17,10 @@ COPY apps apps
 # Baked into the bundle at build time (Vite has no runtime env).
 ARG VITE_API_BASE_URL=http://localhost:3000
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Public Mapbox token. Empty is a supported build: the relief page then renders
+# its "map unavailable" fallback instead. Never log or echo this value.
+ARG VITE_MAPBOX_ACCESS_TOKEN=
+ENV VITE_MAPBOX_ACCESS_TOKEN=$VITE_MAPBOX_ACCESS_TOKEN
 RUN pnpm --filter @heatshift/shared build && pnpm --filter @heatshift/web build
 
 FROM nginx:1.27-alpine AS runtime

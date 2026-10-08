@@ -33,6 +33,9 @@ services:
     command: ['pnpm', '--filter', '@heatshift/web', 'dev', '--host', '0.0.0.0']
     environment:
       VITE_API_BASE_URL: http://localhost:3000
+      # Vite also sees the repo-root .env through the bind mount; this keeps the
+      # token working even when that file is absent. Empty = map fallback.
+      VITE_MAPBOX_ACCESS_TOKEN: ${VITE_MAPBOX_ACCESS_TOKEN:-}
     ports:
       - '5173:5173'
     volumes:

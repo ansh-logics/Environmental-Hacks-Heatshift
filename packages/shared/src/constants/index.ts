@@ -107,6 +107,32 @@ export const HEAT_LEVEL_WBGT_THRESHOLDS: Record<(typeof HEAT_LEVELS)[number], nu
   severe: 32.5,
 };
 
+/* ------------------------------------------------------------------ *
+ * Live weather
+ * ------------------------------------------------------------------ */
+
+export const WEATHER_PROVIDERS = ['open-meteo'] as const;
+export type WeatherProviderId = (typeof WEATHER_PROVIDERS)[number];
+
+/** Shown next to a live result so the worker knows what the plan was built on. */
+export const LIVE_WEATHER_SOURCE_LABEL = 'Live weather via Open-Meteo';
+
+/** The risk maths is still our heuristic model, whatever the data source is. */
+export const HEAT_RISK_MODEL_LABEL = 'HeatShift WBGT model v0.1';
+
+/** Upstream observations are reused for this long, per coarse location cell. */
+export const WEATHER_CACHE_TTL_SECONDS = 600;
+
+/**
+ * Cache cell size in degrees. ~0.1° is roughly 10 km, which is far finer than
+ * Open-Meteo's own 1-3 km model grid, so nearby workers share one lookup
+ * without the cache key implying coordinate-level precision.
+ */
+export const WEATHER_CACHE_CELL_DEGREES = 0.1;
+
+/** Requested map style for the relief layer. */
+export const MAPBOX_STYLE = 'mapbox://styles/mapbox/light-v11';
+
 /** Placeholder identity used until real authentication exists. */
 export const MOCK_WORKER_ID = '00000000-0000-4000-8000-000000000001';
 export const MOCK_WORKER_NAME = 'Demo rider — Delhi NCR';

@@ -13,11 +13,13 @@ export function ShiftSnapshotCard({
   sunExposure,
   locationLabel,
   weather,
+  weatherLabel = 'Weather input',
 }: {
   profile: WorkerProfileDraft;
   sunExposure: SunExposure;
   locationLabel: string;
   weather: { temperatureC: number; humidityPercent: number; windSpeedKmh: number };
+  weatherLabel?: string;
 }) {
   const rows: Array<[string, string]> = [
     ['Work', WORK_TYPE_LABELS[profile.workType]],
@@ -28,7 +30,7 @@ export function ShiftSnapshotCard({
     ['Shade', ACCESS_LEVEL_LABELS[profile.shadeAccess]],
     ['Acclimatised', profile.acclimatized ? 'Yes' : 'No'],
     [
-      'Weather input',
+      weatherLabel,
       `${weather.temperatureC} °C, ${weather.humidityPercent}% RH, ${weather.windSpeedKmh} km/h`,
     ],
   ];

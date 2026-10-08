@@ -11,6 +11,9 @@ const manifestPath = fileURLToPath(
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 
 export default defineConfig({
+  // VITE_* lives in the repository root .env, not apps/web, so dev and the
+  // Docker build read the same file the API and docker compose already use.
+  envDir: fileURLToPath(new URL('../..', import.meta.url)),
   plugins: [
     react(),
     VitePWA({
@@ -23,8 +26,15 @@ export default defineConfig({
         'icons/apple-touch-icon.png',
       ],
       workbox: {
-        // Precache the app shell; API calls stay network-first (no offline sync yet).
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
+        // App shell only. Precaching every emitted file would pull the Mapbox
+        // chunks down on the home page and defeat their lazy loading, so lazy
+        // route chunks are cached the first time they are actually used.
+        globPatterns: [
+          'index.html',
+          '**/*.webmanifest',
+          'assets/index-*.js',
+          'assets/index-*.css',
+        ],
         navigateFallback: '/index.html',
         runtimeCaching: [
           {
@@ -34,6 +44,15 @@ export default defineConfig({
               cacheName: 'heatshift-api',
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 20, maxAgeSeconds: 300 },
+            },
+          },
+          {
+            urlPattern: ({ sameOrigin, url }) =>
+              sameOrigin && /\.(?:js|css)$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'heatshift-chunks',
+              expiration: { maxEntries: 60, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },
           },
         ],
@@ -48,6 +67,11 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  worker: {
+    // mapbox-gl's ESM build starts its own worker with `{ type: 'module' }`.
+    // Vite's default iife worker format cannot code-split, so the build fails.
+    format: 'es',
   },
   server: {
     host: true,

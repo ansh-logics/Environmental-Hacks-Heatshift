@@ -6,6 +6,10 @@ import { ConnectionPanel } from '../components/shared/connection-panel';
 import { OnboardingPanel } from '../features/onboarding/onboarding-panel';
 import { HeatRiskPanel } from '../features/heat-risk/heat-risk-panel';
 import {
+  LiveHeatRiskCard,
+  LiveProvenance,
+} from '../features/heat-risk/live-heat-risk-card';
+import {
   HeatRiskEmptyCard,
   HeatRiskLoadingCard,
   HeatRiskResultCard,
@@ -57,10 +61,21 @@ export function WorkerDashboardPage() {
                 weather={shift.weather}
                 sunExposure={shift.sunExposure}
                 activePreset={shift.activePreset}
-                loading={shift.loading}
+                loading={shift.manualLoading}
                 onWeatherChange={shift.setWeather}
                 onPreset={shift.applyPreset}
                 onRun={() => void shift.run()}
+              />
+            </StaggeredItem>
+
+            <StaggeredItem>
+              <LiveHeatRiskCard
+                location={location}
+                profile={profile}
+                result={shift.liveResult}
+                error={shift.liveError}
+                loading={shift.liveLoading}
+                onRun={shift.requestLive}
               />
             </StaggeredItem>
 
@@ -69,7 +84,12 @@ export function WorkerDashboardPage() {
               {shift.loading ? (
                 <HeatRiskLoadingCard />
               ) : shift.result ? (
-                <HeatRiskResultCard result={shift.result} />
+                <HeatRiskResultCard
+                  result={shift.result}
+                  provenance={
+                    shift.liveResult ? <LiveProvenance result={shift.liveResult} /> : null
+                  }
+                />
               ) : (
                 <HeatRiskEmptyCard />
               )}
@@ -90,7 +110,16 @@ export function WorkerDashboardPage() {
                 profile={profile}
                 sunExposure={shift.sunExposure}
                 locationLabel={location.label}
-                weather={shift.weather}
+                weather={
+                  shift.liveResult
+                    ? {
+                        temperatureC: shift.liveResult.weather.temperatureC,
+                        humidityPercent: shift.liveResult.weather.humidityPercent,
+                        windSpeedKmh: shift.liveResult.weather.windSpeedKmh,
+                      }
+                    : shift.weather
+                }
+                weatherLabel={shift.liveResult ? 'Live weather' : 'Weather input'}
               />
             </StaggeredItem>
             <StaggeredItem>
