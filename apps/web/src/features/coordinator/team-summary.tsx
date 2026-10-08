@@ -8,6 +8,7 @@ import {
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { StatCard } from '../../components/ui/stat';
+import { AnimatedNumber } from '../../components/motion/animated-number';
 import { EmptyState } from '../../components/shared/empty-state';
 import {
   IconClock,
@@ -32,30 +33,32 @@ export function CoordinatorMetrics({ data }: { data: CheckInSummary }) {
   const flagged =
     data.byStatus.unwell + data.byStatus.need_water + data.byStatus.need_break;
 
+  // These cards only mount once the summary has really arrived, so the
+  // count-up always runs against server data and never against a placeholder.
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-6">
       <StatCard
         label={`Check-ins / ${data.windowHours} h`}
-        value={data.inWindow}
+        value={<AnimatedNumber value={data.inWindow} />}
         hint={`${data.total} recorded in total`}
         icon={<IconClock size={18} />}
       />
       <StatCard
         label="Workers reporting"
-        value={data.uniqueWorkers}
+        value={<AnimatedNumber value={data.uniqueWorkers} />}
         hint="Distinct check-in ids in this window"
         icon={<IconPeople size={18} />}
       />
       <StatCard
         label="Flagged for help"
-        value={flagged}
+        value={<AnimatedNumber value={flagged} />}
         hint="Need water, need break or unwell"
         tone={flagged > 0 ? 'moderate' : 'low'}
         icon={<IconDrop size={18} />}
       />
       <StatCard
         label="Unwell"
-        value={data.byStatus.unwell}
+        value={<AnimatedNumber value={data.byStatus.unwell} />}
         hint={
           data.byStatus.unwell > 0
             ? 'Escalate to a clinic call'

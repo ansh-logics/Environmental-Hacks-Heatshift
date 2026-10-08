@@ -5,6 +5,7 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { DemoNotice } from '../components/shared/demo-notice';
 import { ContentGrid, GridColumn } from '../components/layout/content-grid';
+import { Reveal, StaggeredGroup, StaggeredItem } from '../components/motion/reveal';
 import { IconDrop, IconGauge, IconShade } from '../components/ui/icons';
 
 const FEATURES = [
@@ -36,7 +37,7 @@ export function HomePage() {
   return (
     <ContentGrid>
       <GridColumn span={7}>
-        <div className="max-w-prose">
+        <Reveal className="max-w-prose">
           <Badge tone="high">Built for Indian summer</Badge>
           <h1 className="mt-3 text-3xl leading-tight lg:text-[2.75rem] lg:leading-[1.15]">
             City heat alerts do not tell{' '}
@@ -59,7 +60,7 @@ export function HomePage() {
               </Button>
             </Link>
           </div>
-        </div>
+        </Reveal>
       </GridColumn>
 
       <GridColumn span={5}>
@@ -78,23 +79,27 @@ export function HomePage() {
       </GridColumn>
 
       <GridColumn span={12}>
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
-          {FEATURES.map((feature, index) => (
-            <li key={feature.title}>
-              <Card className="h-full">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-heat-accent/10 text-heat-accent-dark">
-                  <feature.icon size={24} />
-                </span>
-                <h2 className="mt-3 text-base">
-                  {index + 1}. {feature.title}
-                </h2>
-                <p className="mt-1 text-sm leading-relaxed text-ink-500">
-                  {feature.body}
-                </p>
-              </Card>
-            </li>
-          ))}
-        </ul>
+        <StaggeredGroup>
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+            {FEATURES.map((feature, index) => (
+              <li key={feature.title}>
+                <StaggeredItem className="h-full">
+                  <Card className="h-full">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-heat-accent/10 text-heat-accent-dark">
+                      <feature.icon size={24} />
+                    </span>
+                    <h2 className="mt-3 text-base">
+                      {index + 1}. {feature.title}
+                    </h2>
+                    <p className="mt-1 text-sm leading-relaxed text-ink-500">
+                      {feature.body}
+                    </p>
+                  </Card>
+                </StaggeredItem>
+              </li>
+            ))}
+          </ul>
+        </StaggeredGroup>
       </GridColumn>
 
       <GridColumn span={12}>

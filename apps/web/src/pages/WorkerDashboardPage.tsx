@@ -1,5 +1,6 @@
 import { Card } from '../components/ui/card';
 import { ContentGrid, GridColumn } from '../components/layout/content-grid';
+import { Reveal, StaggeredGroup, StaggeredItem } from '../components/motion/reveal';
 import { ErrorNote } from '../components/shared/error-note';
 import { ConnectionPanel } from '../components/shared/connection-panel';
 import { OnboardingPanel } from '../features/onboarding/onboarding-panel';
@@ -32,69 +33,93 @@ export function WorkerDashboardPage() {
 
   return (
     <>
-      <ShiftHero
-        name={identity.name.split(' ')[0] ?? identity.name}
-        profile={profile}
-        sunExposure={shift.sunExposure}
-        result={shift.result}
-        loading={shift.loading}
-        onCheck={() => void shift.run()}
-      />
+      <Reveal>
+        <ShiftHero
+          name={identity.name.split(' ')[0] ?? identity.name}
+          profile={profile}
+          sunExposure={shift.sunExposure}
+          result={shift.result}
+          loading={shift.loading}
+          onCheck={() => void shift.run()}
+        />
+      </Reveal>
 
       <ContentGrid>
-        <GridColumn span={8} className="space-y-4 lg:space-y-6">
-          <OnboardingPanel />
+        <GridColumn span={8}>
+          <StaggeredGroup className="space-y-4 lg:space-y-6">
+            <StaggeredItem>
+              <OnboardingPanel />
+            </StaggeredItem>
 
-          <HeatRiskPanel
-            profile={profile}
-            weather={shift.weather}
-            sunExposure={shift.sunExposure}
-            activePreset={shift.activePreset}
-            loading={shift.loading}
-            onWeatherChange={shift.setWeather}
-            onPreset={shift.applyPreset}
-            onRun={() => void shift.run()}
-          />
+            <StaggeredItem>
+              <HeatRiskPanel
+                profile={profile}
+                weather={shift.weather}
+                sunExposure={shift.sunExposure}
+                activePreset={shift.activePreset}
+                loading={shift.loading}
+                onWeatherChange={shift.setWeather}
+                onPreset={shift.applyPreset}
+                onRun={() => void shift.run()}
+              />
+            </StaggeredItem>
 
-          {shift.error ? <ErrorNote message={shift.error} /> : null}
-          {shift.loading ? (
-            <HeatRiskLoadingCard />
-          ) : shift.result ? (
-            <HeatRiskResultCard result={shift.result} />
-          ) : (
-            <HeatRiskEmptyCard />
-          )}
+            {shift.error ? <ErrorNote message={shift.error} /> : null}
+            <StaggeredItem>
+              {shift.loading ? (
+                <HeatRiskLoadingCard />
+              ) : shift.result ? (
+                <HeatRiskResultCard result={shift.result} />
+              ) : (
+                <HeatRiskEmptyCard />
+              )}
+            </StaggeredItem>
 
-          <CheckInBar
-            coords={location.source === 'device' ? location.coords : undefined}
-          />
+            <StaggeredItem>
+              <CheckInBar
+                coords={location.source === 'device' ? location.coords : undefined}
+              />
+            </StaggeredItem>
+          </StaggeredGroup>
         </GridColumn>
 
-        <GridColumn span={4} className="space-y-4 lg:space-y-6">
-          <ShiftSnapshotCard
-            profile={profile}
-            sunExposure={shift.sunExposure}
-            locationLabel={location.label}
-            weather={shift.weather}
-          />
-          <SafetyCard profile={profile} result={shift.result} />
-          <RecentActivityCard userId={identity.userId} />
-
-          <Card eyebrow="Nearby" title="Relief on your route">
-            {relief.error ? (
-              <ErrorNote message={relief.error.message} onRetry={relief.reload} />
-            ) : (
-              <ReliefPointList
-                points={relief.points}
-                origin={location.coords}
-                loading={relief.loading}
-                limit={3}
-                emptyMessage="No seeded relief points near this location yet."
+        <GridColumn span={4}>
+          <StaggeredGroup delay={0.1} className="space-y-4 lg:space-y-6">
+            <StaggeredItem>
+              <ShiftSnapshotCard
+                profile={profile}
+                sunExposure={shift.sunExposure}
+                locationLabel={location.label}
+                weather={shift.weather}
               />
-            )}
-          </Card>
+            </StaggeredItem>
+            <StaggeredItem>
+              <SafetyCard profile={profile} result={shift.result} />
+            </StaggeredItem>
+            <StaggeredItem>
+              <RecentActivityCard userId={identity.userId} />
+            </StaggeredItem>
 
-          <ConnectionPanel />
+            <StaggeredItem>
+              <Card eyebrow="Nearby" title="Relief on your route">
+                {relief.error ? (
+                  <ErrorNote message={relief.error.message} onRetry={relief.reload} />
+                ) : (
+                  <ReliefPointList
+                    points={relief.points}
+                    origin={location.coords}
+                    loading={relief.loading}
+                    limit={3}
+                    emptyMessage="No seeded relief points near this location yet."
+                  />
+                )}
+              </Card>
+            </StaggeredItem>
+
+            <StaggeredItem>
+              <ConnectionPanel />
+            </StaggeredItem>
+          </StaggeredGroup>
         </GridColumn>
       </ContentGrid>
     </>

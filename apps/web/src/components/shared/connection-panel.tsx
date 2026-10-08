@@ -1,8 +1,9 @@
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { IconChevron, IconRefresh } from '../ui/icons';
+import { IconRefresh } from '../ui/icons';
 import { ConnectionStatus } from '../ui/status-dot';
+import { Disclosure } from '../motion/collapsible-content';
 import { useConnection } from '../../app/providers';
 import { API_BASE_URL } from '../../lib/constants';
 
@@ -56,12 +57,12 @@ export function ConnectionPanel() {
         </p>
       ) : null}
 
-      <details className="group mt-3">
-        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-ink-500 hover:text-ink-900">
-          <IconChevron size={14} className="transition-transform group-open:rotate-180" />
-          Diagnostics
-        </summary>
-        <dl className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-white p-3 text-xs text-ink-500">
+      <Disclosure
+        label="Diagnostics"
+        className="mt-3"
+        triggerClassName="flex min-h-8 w-full items-center gap-1.5 text-left text-xs font-semibold text-ink-500 hover:text-ink-900"
+      >
+        <dl className="grid grid-cols-2 gap-2 rounded-xl bg-white p-3 text-xs text-ink-500">
           <div className="col-span-2 min-w-0">
             <dt className="font-semibold text-ink-700">Endpoint</dt>
             <dd className="break-all">{`${API_BASE_URL}/health`}</dd>
@@ -85,7 +86,7 @@ export function ConnectionPanel() {
             <dd>{health ? `${health.service} ${health.version}` : '-'}</dd>
           </div>
         </dl>
-      </details>
+      </Disclosure>
     </Card>
   );
 }

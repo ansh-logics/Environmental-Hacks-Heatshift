@@ -3,6 +3,7 @@ import { MOCK_WORKER_ID, MOCK_WORKER_NAME } from '@heatshift/shared';
 import { STORAGE_KEYS } from '../lib/constants';
 import { useLocalStorage } from '../hooks/use-local-storage';
 import { useApiStatus, type ApiStatus } from '../hooks/use-api-status';
+import { MotionProvider } from '../components/motion/motion-provider';
 import { DEFAULT_PROFILE, type WorkerProfileDraft } from '../features/onboarding/profile';
 
 type AppState = {
@@ -33,7 +34,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={value}>
-      <ApiStatusProvider>{children}</ApiStatusProvider>
+      <ApiStatusProvider>
+        <MotionProvider>{children}</MotionProvider>
+      </ApiStatusProvider>
     </AppContext.Provider>
   );
 }
