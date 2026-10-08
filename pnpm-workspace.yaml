@@ -1,0 +1,7 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# esbuild (used by tsup and Vite) needs its platform binary from a postinstall script.
+allowBuilds:
+  esbuild: true

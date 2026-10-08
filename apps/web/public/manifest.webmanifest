@@ -1,0 +1,56 @@
+{
+  "id": "/",
+  "name": "HeatShift - heat risk and relief for outdoor workers",
+  "short_name": "HeatShift",
+  "description": "Personal heat-risk score, work/rest/hydration plan and nearby water, shade, clinic and cooling spaces for delivery riders, guards, construction workers and street vendors.",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#fffaf5",
+  "theme_color": "#e8590c",
+  "categories": ["health", "productivity", "weather"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My heat risk",
+      "short_name": "Risk",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nearby relief points",
+      "short_name": "Relief",
+      "url": "/relief",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Team check-ins",
+      "short_name": "Team",
+      "url": "/coordinator",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

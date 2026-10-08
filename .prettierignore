@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+dist
+dev-dist
+node_modules
+apps/api/drizzle
+coverage

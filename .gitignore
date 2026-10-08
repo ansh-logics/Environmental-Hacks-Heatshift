@@ -1,0 +1,27 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+dev-dist/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# runtime
+*.log
+logs/
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+
+# local database dumps / coverage
+coverage/
+pgdata/

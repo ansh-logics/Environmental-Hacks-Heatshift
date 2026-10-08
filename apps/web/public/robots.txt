@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# HeatShift is an internal field tool for now; no search indexing is requested,
+# but nothing here is secret either.

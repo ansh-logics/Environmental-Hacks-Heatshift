@@ -1,0 +1,35 @@
+{
+  "name": "heatshift",
+  "private": true,
+  "type": "module",
+  "description": "HeatShift - personal heat-risk, work/rest planning and relief locations for outdoor and gig workers in India",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "setup": "pnpm install && pnpm --filter @heatshift/shared build",
+    "dev": "pnpm --parallel --filter @heatshift/api --filter @heatshift/web dev",
+    "dev:web": "pnpm --filter @heatshift/web dev",
+    "dev:api": "pnpm --filter @heatshift/api dev",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "pnpm --filter @heatshift/api db:migrate",
+    "db:seed": "pnpm --filter @heatshift/api db:seed",
+    "build": "pnpm -r build",
+    "start:api": "pnpm --filter @heatshift/api start",
+    "typecheck": "pnpm --filter @heatshift/shared build && pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,cjs,json,md,css,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,cjs,json,md,css,yml,yaml}\"",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f api web",
+    "clean": "rm -rf apps/*/dist packages/*/dist node_modules/.vite"
+  },
+  "devDependencies": {
+    "@heatshift/eslint-config": "workspace:*",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3"
+  }
+}

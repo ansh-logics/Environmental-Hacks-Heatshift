@@ -1,0 +1,79 @@
+# Full local stack, one command: docker compose up --build
+#   web  -> http://localhost:5173  (nginx serving the production Vite build)
+#   api  -> http://localhost:3000  (Fastify, migrations + demo seed run at boot)
+#   db   -> localhost:5432         (PostgreSQL 16)
+
+name: heatshift
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-heatshift}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-heatshift}
+      POSTGRES_DB: ${POSTGRES_DB:-heatshift}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - heatshift-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-heatshift} -d ${POSTGRES_DB:-heatshift}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    image: heatshift-api:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      DATABASE_URL: postgres://${POSTGRES_USER:-heatshift}:${POSTGRES_PASSWORD:-heatshift}@postgres:5432/${POSTGRES_DB:-heatshift}
+      MIGRATE_ON_BOOT: ${MIGRATE_ON_BOOT:-true}
+      SEED_ON_BOOT: ${SEED_ON_BOOT:-true}
+    ports:
+      - '${PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runtime
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+    image: heatshift-web:local
+    restart: unless-stopped
+    ports:
+      - '5173:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/healthz']
+      interval: 15s
+      timeout: 4s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  heatshift-pgdata:
